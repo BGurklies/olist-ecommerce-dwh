@@ -8,16 +8,14 @@ sql = "USE OlistDWH;\nGO\n\n"
 
 for file in sorted(os.listdir(csv_folder)):
     if file.endswith('.csv'):
-        # Tabellenname aus Dateiname ableiten
         table_name = (file
             .replace('olist_', '')
             .replace('_dataset', '')
             .replace('.csv', ''))
 
-        # Nur Header lesen
         df = pd.read_csv(
             os.path.join(csv_folder, file),
-            nrows=0,  # nur Spaltenbezeichner, keine Daten
+            nrows=0, 
             encoding='utf-8'
         )
 

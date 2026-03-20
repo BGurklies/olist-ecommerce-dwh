@@ -1,0 +1,11 @@
+USE OlistDWH;
+GO
+
+CREATE SCHEMA raw;
+GO
+
+CREATE SCHEMA cleansed;
+GO
+
+CREATE SCHEMA mart;
+GO
