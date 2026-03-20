@@ -1,0 +1,22 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Data
+data/
+*.csv
+*.xlsx
+*.xls
+
+# SQL Server
+*.mdf
+*.ldf
+*.bak
+
+# VSC
+.vscode/
+
+# Environment
+.env
