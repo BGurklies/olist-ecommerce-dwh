@@ -16,7 +16,55 @@ SELECT COUNT(*) AS total_rows
 FROM raw.orders;
 
 
--- 2. Null Analysis
+-- 2. Min/Max Character Length per Column
+-- ============================================================
+SELECT column_name, MIN(length) AS min_length, MAX(length) AS max_length
+FROM (
+    SELECT 'order_id'                      AS column_name, LEN(order_id)                      AS length FROM raw.orders
+    UNION ALL
+    SELECT 'customer_id'                   AS column_name, LEN(customer_id)                   AS length FROM raw.orders
+    UNION ALL
+    SELECT 'order_status'                  AS column_name, LEN(order_status)                  AS length FROM raw.orders
+    UNION ALL
+    SELECT 'order_purchase_timestamp'      AS column_name, LEN(order_purchase_timestamp)      AS length FROM raw.orders
+    UNION ALL
+    SELECT 'order_approved_at'             AS column_name, LEN(order_approved_at)             AS length FROM raw.orders
+    UNION ALL
+    SELECT 'order_delivered_carrier_date'  AS column_name, LEN(order_delivered_carrier_date)  AS length FROM raw.orders
+    UNION ALL
+    SELECT 'order_delivered_customer_date' AS column_name, LEN(order_delivered_customer_date) AS length FROM raw.orders
+    UNION ALL
+    SELECT 'order_estimated_delivery_date' AS column_name, LEN(order_estimated_delivery_date) AS length FROM raw.orders
+) AS lengths
+GROUP BY column_name
+ORDER BY column_name;
+
+
+-- 3. Min/Max Character Length per Column (quotes cleansed)
+-- ============================================================
+SELECT column_name, MIN(length) AS min_length, MAX(length) AS max_length
+FROM (
+    SELECT 'order_id'                      AS column_name, LEN(TRIM(REPLACE(order_id,                      '"', ''))) AS length FROM raw.orders
+    UNION ALL
+    SELECT 'customer_id'                   AS column_name, LEN(TRIM(REPLACE(customer_id,                   '"', ''))) AS length FROM raw.orders
+    UNION ALL
+    SELECT 'order_status'                  AS column_name, LEN(TRIM(order_status))                                    AS length FROM raw.orders
+    UNION ALL
+    SELECT 'order_purchase_timestamp'      AS column_name, LEN(TRIM(order_purchase_timestamp))                        AS length FROM raw.orders
+    UNION ALL
+    SELECT 'order_approved_at'             AS column_name, LEN(TRIM(order_approved_at))                               AS length FROM raw.orders
+    UNION ALL
+    SELECT 'order_delivered_carrier_date'  AS column_name, LEN(TRIM(order_delivered_carrier_date))                    AS length FROM raw.orders
+    UNION ALL
+    SELECT 'order_delivered_customer_date' AS column_name, LEN(TRIM(order_delivered_customer_date))                   AS length FROM raw.orders
+    UNION ALL
+    SELECT 'order_estimated_delivery_date' AS column_name, LEN(TRIM(order_estimated_delivery_date))                   AS length FROM raw.orders
+) AS lengths
+GROUP BY column_name
+ORDER BY column_name;
+
+
+-- 4. Null Analysis
 -- ============================================================
 SELECT
     SUM(CASE WHEN order_id IS NULL THEN 1 ELSE 0 END)                      AS null_order_id,
@@ -30,7 +78,7 @@ SELECT
 FROM raw.orders;
 
 
--- 3. Duplicate order_id
+-- 5. Duplicate order_id
 -- ============================================================
 SELECT order_id, COUNT(*) AS cnt
 FROM raw.orders
@@ -38,7 +86,7 @@ GROUP BY order_id
 HAVING COUNT(*) > 1;
 
 
--- 4. Order Status Distribution
+-- 6. Order Status Distribution
 -- ============================================================
 SELECT
     order_status,
@@ -49,7 +97,7 @@ GROUP BY order_status
 ORDER BY cnt DESC;
 
 
--- 5. Order Date Range
+-- 7. Order Date Range
 -- ============================================================
 SELECT
     MIN(order_purchase_timestamp)       AS earliest_order,
@@ -62,7 +110,7 @@ SELECT
 FROM raw.orders;
 
 
--- 6. Null Dates by Order Status
+-- 8. Null Dates by Order Status
 -- ============================================================
 SELECT
     order_status,
@@ -75,7 +123,7 @@ GROUP BY order_status
 ORDER BY total DESC;
 
 
--- 7. Delivery Time Analysis (delivered orders only)
+-- 9. Delivery Time Analysis (delivered orders only)
 -- ============================================================
 SELECT
     MIN(DATEDIFF(DAY, order_purchase_timestamp, order_delivered_customer_date)) AS min_delivery_days,
@@ -86,7 +134,7 @@ WHERE order_status = 'delivered'
 AND order_delivered_customer_date IS NOT NULL;
 
 
--- 8. Late Deliveries (delivered after estimated date)
+-- 10. Late Deliveries (delivered after estimated date)
 -- ============================================================
 SELECT
     COUNT(*) AS late_deliveries,
@@ -103,7 +151,7 @@ SELECT * FROM raw.orders WHERE order_status = 'delivered' AND order_delivered_cu
 SELECT * FROM raw.orders WHERE order_status != 'delivered' AND order_delivered_customer_date IS NOT NULL;
 
 
--- 9. Outliers: Suspicious Delivery Times
+-- 11. Outliers: Suspicious Delivery Times
 -- ============================================================
 SELECT
     order_id,
@@ -115,7 +163,7 @@ WHERE DATEDIFF(DAY, order_purchase_timestamp, order_delivered_customer_date) > 6
 ORDER BY delivery_days DESC;
 
 
--- 10. Orders per Month
+-- 12. Orders per Month
 -- ============================================================
 SELECT
     SUBSTRING(order_purchase_timestamp, 1, 7) AS year_month,

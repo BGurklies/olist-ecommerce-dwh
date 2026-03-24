@@ -35,4 +35,15 @@ GO
 
 -- orders
 -- ============================================================
-
+CREATE TABLE cleansed.orders (
+    order_id                        NVARCHAR(32)    NOT NULL,
+    customer_id                     NVARCHAR(32)    NOT NULL,
+    order_status                    NVARCHAR(25)    NOT NULL,
+    order_purchase_timestamp        DATETIME        NOT NULL,
+    order_approved_at               DATETIME        NULL,
+    order_delivered_carrier_date    DATETIME        NULL,
+    order_delivered_customer_date   DATETIME        NULL,
+    order_estimated_delivery_date   DATETIME        NOT NULL,
+    CONSTRAINT PK_cleansed_orders PRIMARY KEY (order_id)
+);
+GO
