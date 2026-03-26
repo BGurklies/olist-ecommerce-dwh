@@ -1,16 +1,11 @@
 CREATE OR ALTER PROCEDURE cleansed.sp_load_orders
+    @run_id NVARCHAR(50) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
 
     -- --------------------------------------------------------
-    -- 1. Truncate
-    -- --------------------------------------------------------
-    TRUNCATE TABLE cleansed.orders;
-
-
-    -- --------------------------------------------------------
-    -- 2. Error Logging
+    -- 1. Error Logging (DQ Checks) - based on raw.orders
     -- --------------------------------------------------------
 
     -- NULL order_id
@@ -121,37 +116,119 @@ BEGIN
         order_delivered_customer_date
     FROM raw.orders
     WHERE TRY_CONVERT(DATETIME, order_delivered_customer_date, 120) < TRY_CONVERT(DATETIME, order_purchase_timestamp, 120)
-    AND order_delivered_customer_date IS NOT NULL;
-
+    AND order_delivered_customer_date IS NOT NULL
+    AND order_purchase_timestamp IS NOT NULL;
 
     -- --------------------------------------------------------
-    -- 3. Load cleansed data
+    -- 2. Incremental upsert into cleansed.orders (MERGE)
+    --    row_hash controls whether a row gets updated or not.
     -- --------------------------------------------------------
-    INSERT INTO cleansed.orders (
-        order_id,
-        customer_id,
-        order_status,
-        order_purchase_timestamp,
-        order_approved_at,
-        order_delivered_carrier_date,
-        order_delivered_customer_date,
-        order_estimated_delivery_date
+
+    ;WITH normalized AS (
+        SELECT
+            REPLACE(TRIM(order_id), '"', '')        AS order_id,
+            REPLACE(TRIM(customer_id), '"', '')     AS customer_id,
+            TRIM(order_status)                     AS order_status,
+            TRY_CONVERT(DATETIME, order_purchase_timestamp, 120) AS order_purchase_timestamp,
+            TRY_CONVERT(DATETIME, order_approved_at, 120)        AS order_approved_at,
+            TRY_CONVERT(DATETIME, order_delivered_carrier_date, 120)  AS order_delivered_carrier_date,
+            TRY_CONVERT(DATETIME, order_delivered_customer_date, 120) AS order_delivered_customer_date,
+            TRY_CONVERT(DATETIME, order_estimated_delivery_date, 120) AS order_estimated_delivery_date
+        FROM raw.orders
+    ),
+    hashed AS (
+        SELECT
+            order_id,
+            customer_id,
+            order_status,
+            order_purchase_timestamp,
+            order_approved_at,
+            order_delivered_carrier_date,
+            order_delivered_customer_date,
+            order_estimated_delivery_date,
+            HASHBYTES('SHA2_256', CONCAT(
+                order_id, '|',
+                customer_id, '|',
+                order_status, '|',
+                COALESCE(CONVERT(NVARCHAR(30), order_purchase_timestamp, 126), ''), '|',
+                COALESCE(CONVERT(NVARCHAR(30), order_approved_at, 126), ''), '|',
+                COALESCE(CONVERT(NVARCHAR(30), order_delivered_carrier_date, 126), ''), '|',
+                COALESCE(CONVERT(NVARCHAR(30), order_delivered_customer_date, 126), ''), '|',
+                COALESCE(CONVERT(NVARCHAR(30), order_estimated_delivery_date, 126), '')
+            )) AS row_hash
+        FROM normalized
     )
-    SELECT
-        REPLACE(TRIM(order_id),       '"', ''),
-        REPLACE(TRIM(customer_id),    '"', ''),
-        TRIM(order_status),
-        TRY_CONVERT(DATETIME, order_purchase_timestamp, 120),
-        TRY_CONVERT(DATETIME, order_approved_at, 120),
-        TRY_CONVERT(DATETIME, order_delivered_carrier_date, 120),
-        TRY_CONVERT(DATETIME, order_delivered_customer_date, 120),
-        TRY_CONVERT(DATETIME, order_estimated_delivery_date, 120)
-    FROM raw.orders;
+    MERGE cleansed.orders AS tgt
+    USING (
+        SELECT
+            order_id,
+            customer_id,
+            order_status,
+            order_purchase_timestamp,
+            order_approved_at,
+            order_delivered_carrier_date,
+            order_delivered_customer_date,
+            order_estimated_delivery_date,
+            row_hash
+        FROM hashed
+        WHERE order_id IS NOT NULL
+          AND customer_id IS NOT NULL
+          AND order_status IS NOT NULL
+          AND LEN(order_id) = 32
+          AND LEN(customer_id) = 32
+          AND LEN(order_status) > 0
+          AND LEN(order_status) <= 25
+          AND order_purchase_timestamp IS NOT NULL
+          AND order_estimated_delivery_date IS NOT NULL
+          AND (order_delivered_customer_date IS NULL OR order_delivered_customer_date >= order_purchase_timestamp)
+    ) AS src
+    ON tgt.order_id = src.order_id
+    WHEN MATCHED AND tgt.row_hash <> src.row_hash THEN
+        UPDATE SET
+            customer_id = src.customer_id,
+            order_status = src.order_status,
+            order_purchase_timestamp = src.order_purchase_timestamp,
+            order_approved_at = src.order_approved_at,
+            order_delivered_carrier_date = src.order_delivered_carrier_date,
+            order_delivered_customer_date = src.order_delivered_customer_date,
+            order_estimated_delivery_date = src.order_estimated_delivery_date,
+            row_hash = src.row_hash,
+            updated_at = GETDATE()
+    WHEN NOT MATCHED BY TARGET THEN
+        INSERT (
+            order_id,
+            customer_id,
+            order_status,
+            order_purchase_timestamp,
+            order_approved_at,
+            order_delivered_carrier_date,
+            order_delivered_customer_date,
+            order_estimated_delivery_date,
+            row_hash,
+            updated_at
+        )
+        VALUES (
+            src.order_id,
+            src.customer_id,
+            src.order_status,
+            src.order_purchase_timestamp,
+            src.order_approved_at,
+            src.order_delivered_carrier_date,
+            src.order_delivered_customer_date,
+            src.order_estimated_delivery_date,
+            src.row_hash,
+            GETDATE()
+        );
+
+    DECLARE @merge_rowcount INT;
+    SET @merge_rowcount = @@ROWCOUNT;
 
     DECLARE @error_count INT;
-    SELECT @error_count = COUNT(*) FROM cleansed.error_log WHERE table_name = 'orders';
+    SELECT @error_count = COUNT(*)
+    FROM cleansed.error_log
+    WHERE table_name = 'orders';
 
-    PRINT 'cleansed.orders loaded: ' + CAST(@@ROWCOUNT AS NVARCHAR) + ' rows';
+    PRINT 'cleansed.orders merged (insert/update): ' + CAST(@merge_rowcount AS NVARCHAR) + ' rows';
     PRINT 'Errors logged: ' + CAST(@error_count AS NVARCHAR);
 END;
 GO
