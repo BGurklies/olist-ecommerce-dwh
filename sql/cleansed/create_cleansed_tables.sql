@@ -29,6 +29,8 @@ CREATE TABLE cleansed.customers (
     customer_zip_code_prefix CHAR(5)       NOT NULL,
     customer_city            NVARCHAR(100) NOT NULL,
     customer_state           CHAR(2)       NOT NULL,
+    row_hash                 VARBINARY(32)  NOT NULL,
+    updated_at               DATETIME       NOT NULL DEFAULT GETDATE(),
     CONSTRAINT PK_cleansed_customers PRIMARY KEY (customer_id)
 );
 GO
@@ -44,6 +46,24 @@ CREATE TABLE cleansed.orders (
     order_delivered_carrier_date    DATETIME        NULL,
     order_delivered_customer_date   DATETIME        NULL,
     order_estimated_delivery_date   DATETIME        NOT NULL,
+    row_hash                        VARBINARY(32)  NOT NULL,
+    updated_at                      DATETIME       NOT NULL DEFAULT GETDATE(),
     CONSTRAINT PK_cleansed_orders PRIMARY KEY (order_id)
+);
+GO
+
+-- order_items
+-- ============================================================
+CREATE TABLE cleansed.order_items (
+    order_id                        NVARCHAR(32)    NOT NULL,
+    order_item_id                   NVARCHAR(25)    NOT NULL,
+    product_id                      NVARCHAR(32)    NOT NULL,
+    seller_id                       NVARCHAR(32)    NOT NULL,
+    shipping_limit_date             DATETIME        NOT NULL,
+    price                           DECIMAL(10,2)   NOT NULL,
+    freight_value                   DECIMAL(10,2)   NOT NULL,
+    row_hash                        VARBINARY(32)  NOT NULL,
+    updated_at                      DATETIME       NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT PK_cleansed_order_items PRIMARY KEY (order_id, order_item_id)
 );
 GO

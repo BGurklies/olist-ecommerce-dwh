@@ -7,13 +7,57 @@ USE OlistDWH;
 -- 0. Data Preview
 -- ============================================================
 SELECT TOP 10 *
-FROM raw.order_items;
+FROM raw.order_items
 
 
 -- 1. Row Count
 -- ============================================================
 SELECT COUNT(*) AS total_rows
 FROM raw.order_items;
+
+
+-- 2. Min/Max Character Length per Column
+-- ============================================================
+SELECT column_name, MIN(length) AS min_length, MAX(length) AS max_length
+FROM (
+    SELECT 'order_id'              AS column_name, LEN(order_id) AS length FROM raw.order_items
+    UNION ALL
+    SELECT 'order_item_id'       AS column_name, LEN(order_item_id) AS length FROM raw.order_items
+    UNION ALL
+    SELECT 'product_id' AS column_name, LEN(product_id) AS length FROM raw.order_items
+    UNION ALL
+    SELECT 'seller_id'            AS column_name, LEN(seller_id) AS length FROM raw.order_items
+    UNION ALL
+    SELECT 'shipping_limit_date'           AS column_name, LEN(shipping_limit_date) AS length FROM raw.order_items
+    UNION ALL
+    SELECT 'price'           AS column_name, LEN(price) AS length FROM raw.order_items
+    UNION ALL
+    SELECT 'freight_value'           AS column_name, LEN(freight_value) AS length FROM raw.order_items
+) AS lengths
+GROUP BY column_name
+ORDER BY column_name;
+
+
+-- 3. Min/Max Character Length per Column (quotes cleansed)
+-- ============================================================
+SELECT column_name, MIN(length) AS min_length, MAX(length) AS max_length
+FROM (
+    SELECT 'order_id'              AS column_name, LEN(TRIM(REPLACE(order_id,  '"', ''))) AS length FROM raw.order_items
+    UNION ALL
+    SELECT 'order_item_id'       AS column_name, LEN(order_item_id) AS length FROM raw.order_items
+    UNION ALL
+    SELECT 'product_id' AS column_name, LEN(TRIM(REPLACE(product_id,  '"', ''))) AS length FROM raw.order_items
+    UNION ALL
+    SELECT 'seller_id'            AS column_name, LEN(TRIM(REPLACE(seller_id,  '"', ''))) AS length FROM raw.order_items
+    UNION ALL
+    SELECT 'shipping_limit_date'           AS column_name, LEN(shipping_limit_date) AS length FROM raw.order_items
+    UNION ALL
+    SELECT 'price'           AS column_name, LEN(price) AS length FROM raw.order_items
+    UNION ALL
+    SELECT 'freight_value'           AS column_name, LEN(freight_value) AS length FROM raw.order_items
+) AS lengths
+GROUP BY column_name
+ORDER BY column_name;
 
 
 -- 2. Null Analysis
@@ -37,6 +81,13 @@ GROUP BY order_id, order_item_id
 HAVING COUNT(*) > 1
 ORDER BY duplicate_count DESC;
 
+SELECT order_id, COUNT(*) AS duplicate_count
+FROM raw.order_items
+GROUP BY order_id
+HAVING COUNT(*) > 1
+ORDER BY duplicate_count DESC;
+
+SELECT * FROM raw.order_items WHERE order_id = '"8272b63d03f5f79c56e9e4120aec44ef"'
 
 -- 4. Items per Order Distribution
 -- ============================================================
@@ -75,17 +126,6 @@ SELECT
         ) - (SELECT AVG(CAST(price AS DECIMAL(10,2))) FROM raw.order_items))
     ), 2)                           AS approx_median_price
 FROM raw.order_items;
-
-
-
-
--- CONTINUE HERE -----------------------------------------------
-
-
--- XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX-----
-
-
-
 
 
 -- 7. Freight Value Analysis
