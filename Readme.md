@@ -129,11 +129,11 @@ master_load_full.sql     → Standardlauf: Raw + Cleansed + Mart
 
 ## Status
 
-| Schicht | Status |
+| Komponente | Status |
 |---|---|
-| Raw | In Entwicklung |
-| Cleansed |  In Entwicklung |
-| Mart |  Geplant |
+| DWH: Raw-Layer | In Entwicklung |
+| DWH: Cleansed-Layer |  In Entwicklung |
+| DWH: Mart-Layer |  Geplant |
 | Power BI Reporting |  Geplant |
 
 ---
