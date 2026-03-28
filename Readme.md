@@ -156,10 +156,13 @@ master_load_full.sql     → Standardlauf: Raw + Cleansed + Mart
 -- 3. Cleansed-Tabellen erstellen
 -- sql/cleansed/create_cleansed_tables.sql
 
--- 4. Stored Procedures deployen (alle sps/ Ordner)
+-- 4. Mart-Tabellen erstellen
+-- sql/mart/create_mart_tables.sql
 
--- 5. Pfad in Master-Skript anpassen
+-- 5. Stored Procedures deployen (alle sps/ Ordner)
 
--- 6. Pipeline ausführen
+-- 6. Pfad in Master-Skript anpassen
+
+-- 7. Pipeline ausführen
 -- sql/master_load_full.sql
 ```
