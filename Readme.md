@@ -85,14 +85,16 @@ pipeline_config
 ├── source_pipeline_id → FK auf die upstream RAW-Pipeline
 ├── file_path / file_name → Quelldatei
 ├── load_sequence      → Ausführungsreihenfolge innerhalb eines Layers
-├── is_active          → Pipeline ein-/ausschaltbar ohne Code-Änderung
+├── is_active          → Pipeline ein-/ausschaltbar
 └── last_run_status / last_batch_id → Laufzeitstatus, wird nach jedem Load aktualisiert
 ```
 
 Die Orchestrierungs-SPs lesen ausschließlich aus dieser Tabelle — neue Entities erfordern nur einen neuen `pipeline_config`-Eintrag, keine Änderung an der Orchestrierungslogik.
 
+Das Seeding erfolgt über `dev_pipeline_config.sql` — in einer produktiven Umgebung würde jede Stage (DEV/TEST/PROD) auf einer eigenen SQL Server Instanz laufen und das jeweils passende Seed-Script gegen diese Instanz ausgeführt.
+
 - `orchestration.sp_run_full_load` — startet einen vollständigen Lauf über alle Layer, schreibt in `audit.job_log`
-- `orchestration.sp_run_layer` — iteriert über alle aktiven Pipelines eines Layers (Cursor, `load_sequence`-Reihenfolge), validiert `sp_name` gegen `sys.procedures`, stoppt bei erstem Fehler
+- `orchestration.sp_run_layer` — iteriert über alle aktiven Pipelines eines Layers (Cursor, `load_sequence`-Reihenfolge)
 
 Der SQL Server Agent Job (`agent_job_full_load.sql`) ruft `sp_run_full_load` auf und ermöglicht automatisiertes Scheduling des vollständigen Pipeline-Laufs — täglich, wöchentlich oder nach individueller Konfiguration — ohne manuellen Eingriff.
 
