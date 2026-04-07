@@ -12,11 +12,11 @@ Ziel des Projekts ist eine produktionsnahe DWH-Pipeline in SQL Server mit Batch-
 CSV-Dateien
     │
     ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  RAW                                                            │
+┌────────────────────────────────────────────────────────────────────┐
+│  RAW                                                               │
 │  Append-Only Staging · Batch-Historisierung · keine Transformation │
-│  Metafelder: batch_id, load_ts, file_name                       │
-└─────────────────────────────────────────────────────────────────┘
+│  Metafelder: batch_id, load_ts, file_name                          │
+└────────────────────────────────────────────────────────────────────┘
     │  batch_id wird an CLEANSED weitergegeben
     ▼
 ┌─────────────────────────────────────────────────────────────────┐
