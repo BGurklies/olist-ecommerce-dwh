@@ -123,7 +123,8 @@ olist-ecommerce-dwh/
 ├── sql/
 │   ├── create_schemas.sql
 │   ├── migrations/
-│   │   └── V001__disable_non_customers_pipelines.sql
+│   │   ├── V001__disable_non_customers_pipelines.sql
+│   │   └── ...
 │   ├── audit/
 │   │   └── schema/
 │   │       └── create_audit_tables.sql
