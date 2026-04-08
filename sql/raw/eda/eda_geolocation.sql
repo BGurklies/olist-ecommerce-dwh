@@ -21,7 +21,41 @@ FROM raw.geolocation
 WHERE batch_id = @batch_id;
 
 
--- 2. Null Analysis
+-- 2. Min/Max Character Length per Column
+SELECT column_name, MIN(length) AS min_length, MAX(length) AS max_length
+FROM (
+    SELECT 'geolocation_zip_code_prefix' AS column_name, LEN(geolocation_zip_code_prefix) AS length FROM raw.geolocation WHERE batch_id = @batch_id
+    UNION ALL
+    SELECT 'geolocation_lat'             AS column_name, LEN(geolocation_lat)             AS length FROM raw.geolocation WHERE batch_id = @batch_id
+    UNION ALL
+    SELECT 'geolocation_lng'             AS column_name, LEN(geolocation_lng)             AS length FROM raw.geolocation WHERE batch_id = @batch_id
+    UNION ALL
+    SELECT 'geolocation_city'            AS column_name, LEN(geolocation_city)            AS length FROM raw.geolocation WHERE batch_id = @batch_id
+    UNION ALL
+    SELECT 'geolocation_state'           AS column_name, LEN(geolocation_state)           AS length FROM raw.geolocation WHERE batch_id = @batch_id
+) AS lengths
+GROUP BY column_name
+ORDER BY column_name;
+
+
+-- 3. Min/Max Character Length per Column (quotes cleansed)
+SELECT column_name, MIN(length) AS min_length_quotes_cleansed, MAX(length) AS max_length_quotes_cleansed
+FROM (
+    SELECT 'geolocation_zip_code_prefix' AS column_name, LEN(TRIM(REPLACE(geolocation_zip_code_prefix, '"', ''))) AS length FROM raw.geolocation WHERE batch_id = @batch_id
+    UNION ALL
+    SELECT 'geolocation_lat'             AS column_name, LEN(TRIM(REPLACE(geolocation_lat,             '"', ''))) AS length FROM raw.geolocation WHERE batch_id = @batch_id
+    UNION ALL
+    SELECT 'geolocation_lng'             AS column_name, LEN(TRIM(REPLACE(geolocation_lng,             '"', ''))) AS length FROM raw.geolocation WHERE batch_id = @batch_id
+    UNION ALL
+    SELECT 'geolocation_city'            AS column_name, LEN(TRIM(REPLACE(geolocation_city,            '"', ''))) AS length FROM raw.geolocation WHERE batch_id = @batch_id
+    UNION ALL
+    SELECT 'geolocation_state'           AS column_name, LEN(TRIM(REPLACE(geolocation_state,           '"', ''))) AS length FROM raw.geolocation WHERE batch_id = @batch_id
+) AS lengths
+GROUP BY column_name
+ORDER BY column_name;
+
+
+-- 4. Null Analysis
 SELECT
     SUM(CASE WHEN geolocation_zip_code_prefix IS NULL THEN 1 ELSE 0 END) AS null_zip_code_prefix,
     SUM(CASE WHEN geolocation_lat IS NULL THEN 1 ELSE 0 END)             AS null_lat,
@@ -32,7 +66,7 @@ FROM raw.geolocation
 WHERE batch_id = @batch_id;
 
 
--- 3. Empty String Analysis (after cleansing)
+-- 5. Empty String Analysis (after cleansing)
 SELECT
     SUM(CASE WHEN TRIM(geolocation_zip_code_prefix) = '' THEN 1 ELSE 0 END) AS empty_zip_code_prefix,
     SUM(CASE WHEN TRIM(geolocation_city)  = '' THEN 1 ELSE 0 END)           AS empty_city,
@@ -41,7 +75,7 @@ FROM raw.geolocation
 WHERE batch_id = @batch_id;
 
 
--- 4. Coordinate Parse Failures (TRY_CONVERT returns NULL on malformed input)
+-- 6. Coordinate Parse Failures (TRY_CONVERT returns NULL on malformed input)
 SELECT
     SUM(CASE WHEN geolocation_lat IS NOT NULL AND TRY_CONVERT(FLOAT, geolocation_lat) IS NULL THEN 1 ELSE 0 END) AS unparseable_lat,
     SUM(CASE WHEN geolocation_lng IS NOT NULL AND TRY_CONVERT(FLOAT, geolocation_lng) IS NULL THEN 1 ELSE 0 END) AS unparseable_lng
@@ -49,17 +83,17 @@ FROM raw.geolocation
 WHERE batch_id = @batch_id;
 
 
--- 5. Zip Code Format Check (Brazilian CEP prefix: 5 numeric digits)
+-- 7. Zip Code Format Check (Brazilian CEP prefix: 5 numeric digits)
 SELECT
-    SUM(CASE WHEN LEN(TRIM(geolocation_zip_code_prefix)) != 5                           THEN 1 ELSE 0 END) AS invalid_length,
-    SUM(CASE WHEN LEN(TRIM(geolocation_zip_code_prefix))  = 5
-             AND TRIM(geolocation_zip_code_prefix) LIKE '%[^0-9]%'                       THEN 1 ELSE 0 END) AS invalid_format
+    SUM(CASE WHEN LEN(TRIM(REPLACE(geolocation_zip_code_prefix, '"', ''))) != 5                           THEN 1 ELSE 0 END) AS invalid_length,
+    SUM(CASE WHEN LEN(TRIM(REPLACE(geolocation_zip_code_prefix, '"', '')))  = 5
+             AND TRIM(REPLACE(geolocation_zip_code_prefix, '"', '')) LIKE '%[^0-9]%'                       THEN 1 ELSE 0 END) AS invalid_format
 FROM raw.geolocation
 WHERE batch_id = @batch_id
   AND geolocation_zip_code_prefix IS NOT NULL;
 
 
--- 6. Duplicate Rows (vollständige Duplikate)
+-- 8. Duplicate Rows (vollständige Duplikate)
 SELECT
     geolocation_zip_code_prefix,
     geolocation_lat,
@@ -79,7 +113,7 @@ HAVING COUNT(*) > 1
 ORDER BY cnt DESC;
 
 
--- 7. Distinct vs Total (Duplikatausmaß)
+-- 9. Distinct vs Total (Duplikatausmaß)
 SELECT
     COUNT(*)                                                                                                                AS total_rows,
     COUNT(DISTINCT geolocation_zip_code_prefix)                                                                            AS distinct_zip_prefixes,
@@ -89,7 +123,7 @@ FROM raw.geolocation
 WHERE batch_id = @batch_id;
 
 
--- 8. Multiple Coordinates per Zip Code (Koordinatenstreuung)
+-- 10. Multiple Coordinates per Zip Code (Koordinatenstreuung)
 SELECT
     geolocation_zip_code_prefix,
     COUNT(*)                                    AS cnt,
@@ -106,7 +140,7 @@ HAVING COUNT(*) > 1
 ORDER BY cnt DESC;
 
 
--- 9. Distribution by State
+-- 11. Distribution by State
 SELECT
     geolocation_state,
     COUNT(*)                                           AS cnt,
@@ -117,7 +151,7 @@ GROUP BY geolocation_state
 ORDER BY cnt DESC;
 
 
--- 10. Cities with Inconsistent State Assignment
+-- 12. Cities with Inconsistent State Assignment
 SELECT
     geolocation_city,
     COUNT(DISTINCT geolocation_state)                                            AS distinct_states,
@@ -132,10 +166,10 @@ HAVING COUNT(DISTINCT geolocation_state) > 1
 ORDER BY distinct_states DESC;
 
 
--- 11. Outliers: Coordinates outside Brazil bounds
+-- 13. Outliers: Coordinates outside Brazil bounds
 -- lat: -33.7683 to 5.2717 | lng: -73.9828 to -34.7930
 SELECT
-    geolocation_zip_code_prefix,
+    geolocation_zip_code_prefix AS zip_code_outlier,
     geolocation_lat,
     geolocation_lng,
     geolocation_city,
@@ -153,7 +187,7 @@ WHERE batch_id = @batch_id
 ORDER BY geolocation_zip_code_prefix;
 
 
--- 12. Zip Code Prefix Range
+-- 14. Zip Code Prefix Range
 SELECT
     COUNT(DISTINCT geolocation_zip_code_prefix) AS distinct_zips,
     MIN(geolocation_zip_code_prefix)            AS min_zip,
@@ -162,7 +196,7 @@ FROM raw.geolocation
 WHERE batch_id = @batch_id;
 
 
--- 13. Referential Integrity: geolocation zip codes not found in customers
+-- 15. Referential Integrity: geolocation zip codes not found in customers
 SELECT COUNT(DISTINCT geolocation_zip_code_prefix) AS zips_without_customer
 FROM raw.geolocation g
 WHERE g.batch_id = @batch_id
