@@ -184,10 +184,9 @@ olist-ecommerce-dwh/
 |---|---|
 | Schemas & Audit-Tabellen | Abgeschlossen |
 | Orchestrierung (pipeline_config, Agent Job) | Abgeschlossen |
-| RAW-Layer: customers, orders, order_items, order_payments, geolocation | Abgeschlossen |
-| RAW-Layer: order_reviews, products, sellers, product_category_name_translation | In Entwicklung |
+| RAW-Layer: Stored Procedures und EDAs (alle Entitäten) | Abgeschlossen |
 | CLEANSED-Layer: customers, orders, order_items | Abgeschlossen |
-| CLEANSED-Layer: verbleibende 6 Entities | In Entwicklung |
+| CLEANSED-Layer: verbleibende 6 Entitäten | In Entwicklung |
 | MART-Layer | Geplant |
 | Power BI Reporting | Geplant |
 
