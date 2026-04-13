@@ -12,6 +12,7 @@ CREATE TABLE orchestration.pipeline_config (
     file_name          NVARCHAR(255)    NULL,
     load_sequence      INT              NOT NULL,
     is_active          BIT              NOT NULL DEFAULT 1,
+    needs_preprocessing BIT             NOT NULL DEFAULT 0,
     last_run_ts        DATETIME2(3)     NULL,
     last_run_status    NVARCHAR(20)     NULL,
     last_batch_id      UNIQUEIDENTIFIER NULL,
