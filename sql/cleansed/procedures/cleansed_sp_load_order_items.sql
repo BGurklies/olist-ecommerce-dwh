@@ -38,6 +38,7 @@ BEGIN
         -- 1. Normalize raw data into a temp table so DQ checks and the MERGE
         --    share the same cleaned values without duplicating transformation logic.
         SELECT
+            row_id,
             order_id,
             order_item_id,
             product_id,
@@ -57,88 +58,78 @@ BEGIN
         WHERE batch_id = @batch_id;
 
         -- 2. DQ checks: completeness, validity (length + format + range), uniqueness.
+        --    One dq_log row per distinct (column_name, issue) category with affected_row_count.
         WITH dq_checks AS (
 
             -- Completeness: NULL checks
-            SELECT order_id, 'order_id'            AS column_name, 'NULL value' AS issue, CAST(NULL AS NVARCHAR(MAX)) AS raw_value FROM #normalized_order_items WHERE clean_order_id IS NULL
+            SELECT 'order_id'           AS column_name, 'NULL value' AS issue FROM #normalized_order_items WHERE clean_order_id IS NULL
             UNION ALL
-            SELECT order_id, 'order_item_id'        AS column_name, 'NULL value' AS issue, CAST(NULL AS NVARCHAR(MAX)) AS raw_value FROM #normalized_order_items WHERE clean_order_item_id IS NULL
+            SELECT 'order_item_id',      'NULL value'                         FROM #normalized_order_items WHERE clean_order_item_id IS NULL
             UNION ALL
-            SELECT order_id, 'product_id'           AS column_name, 'NULL value' AS issue, CAST(NULL AS NVARCHAR(MAX)) AS raw_value FROM #normalized_order_items WHERE clean_product_id IS NULL
+            SELECT 'product_id',         'NULL value'                         FROM #normalized_order_items WHERE clean_product_id IS NULL
             UNION ALL
-            SELECT order_id, 'seller_id'            AS column_name, 'NULL value' AS issue, CAST(NULL AS NVARCHAR(MAX)) AS raw_value FROM #normalized_order_items WHERE clean_seller_id IS NULL
+            SELECT 'seller_id',          'NULL value'                         FROM #normalized_order_items WHERE clean_seller_id IS NULL
             UNION ALL
-            SELECT order_id, 'shipping_limit_date'  AS column_name, 'NULL value' AS issue, CAST(NULL AS NVARCHAR(MAX)) AS raw_value FROM #normalized_order_items WHERE shipping_limit_date IS NULL
+            SELECT 'shipping_limit_date','NULL value'                         FROM #normalized_order_items WHERE shipping_limit_date IS NULL
             UNION ALL
-            SELECT order_id, 'price'                AS column_name, 'NULL value' AS issue, CAST(NULL AS NVARCHAR(MAX)) AS raw_value FROM #normalized_order_items WHERE price IS NULL
+            SELECT 'price',              'NULL value'                         FROM #normalized_order_items WHERE price IS NULL
             UNION ALL
-            SELECT order_id, 'freight_value'        AS column_name, 'NULL value' AS issue, CAST(NULL AS NVARCHAR(MAX)) AS raw_value FROM #normalized_order_items WHERE freight_value IS NULL
+            SELECT 'freight_value',      'NULL value'                         FROM #normalized_order_items WHERE freight_value IS NULL
 
             -- Completeness: empty string checks after cleansing
             UNION ALL
-            SELECT order_id, 'order_id'       AS column_name, 'Empty string after cleansing' AS issue, order_id       AS raw_value FROM #normalized_order_items WHERE clean_order_id = ''
+            SELECT 'order_id',      'Empty string after cleansing' FROM #normalized_order_items WHERE clean_order_id = ''
             UNION ALL
-            SELECT order_id, 'order_item_id'  AS column_name, 'Empty string after cleansing' AS issue, order_item_id  AS raw_value FROM #normalized_order_items WHERE clean_order_item_id = ''
+            SELECT 'order_item_id', 'Empty string after cleansing' FROM #normalized_order_items WHERE clean_order_item_id = ''
             UNION ALL
-            SELECT order_id, 'product_id'     AS column_name, 'Empty string after cleansing' AS issue, product_id     AS raw_value FROM #normalized_order_items WHERE clean_product_id = ''
+            SELECT 'product_id',    'Empty string after cleansing' FROM #normalized_order_items WHERE clean_product_id = ''
             UNION ALL
-            SELECT order_id, 'seller_id'      AS column_name, 'Empty string after cleansing' AS issue, seller_id      AS raw_value FROM #normalized_order_items WHERE clean_seller_id = ''
+            SELECT 'seller_id',     'Empty string after cleansing' FROM #normalized_order_items WHERE clean_seller_id = ''
 
-            -- Validity: length checks (hex IDs)
+            -- Validity: format and length checks (hex IDs)
             UNION ALL
-            SELECT order_id, 'order_id'   AS column_name, 'Invalid length after cleansing: ' + CAST(LEN(clean_order_id) AS NVARCHAR)   AS issue, order_id   AS raw_value FROM #normalized_order_items WHERE clean_order_id != ''   AND LEN(clean_order_id) != 32
+            SELECT 'order_id',   'Invalid length or format: expected 32-char lowercase hex' FROM #normalized_order_items WHERE clean_order_id != ''   AND (LEN(clean_order_id) != 32 OR clean_order_id LIKE '%[^0-9a-f]%')
             UNION ALL
-            SELECT order_id, 'product_id' AS column_name, 'Invalid length after cleansing: ' + CAST(LEN(clean_product_id) AS NVARCHAR) AS issue, product_id AS raw_value FROM #normalized_order_items WHERE clean_product_id != '' AND LEN(clean_product_id) != 32
+            SELECT 'product_id', 'Invalid length or format: expected 32-char lowercase hex' FROM #normalized_order_items WHERE clean_product_id != '' AND (LEN(clean_product_id) != 32 OR clean_product_id LIKE '%[^0-9a-f]%')
             UNION ALL
-            SELECT order_id, 'seller_id'  AS column_name, 'Invalid length after cleansing: ' + CAST(LEN(clean_seller_id) AS NVARCHAR)  AS issue, seller_id  AS raw_value FROM #normalized_order_items WHERE clean_seller_id != ''  AND LEN(clean_seller_id) != 32
+            SELECT 'seller_id',  'Invalid length or format: expected 32-char lowercase hex' FROM #normalized_order_items WHERE clean_seller_id != ''  AND (LEN(clean_seller_id) != 32 OR clean_seller_id LIKE '%[^0-9a-f]%')
 
-            -- Validity: format checks (hex IDs)
+            -- Validity: order_item_id must be numeric
             UNION ALL
-            SELECT order_id, 'order_id'   AS column_name, 'Invalid format: expected 32-char lowercase hex' AS issue, order_id   AS raw_value FROM #normalized_order_items WHERE LEN(clean_order_id) = 32   AND clean_order_id LIKE '%[^0-9a-f]%'
-            UNION ALL
-            SELECT order_id, 'product_id' AS column_name, 'Invalid format: expected 32-char lowercase hex' AS issue, product_id AS raw_value FROM #normalized_order_items WHERE LEN(clean_product_id) = 32 AND clean_product_id LIKE '%[^0-9a-f]%'
-            UNION ALL
-            SELECT order_id, 'seller_id'  AS column_name, 'Invalid format: expected 32-char lowercase hex' AS issue, seller_id  AS raw_value FROM #normalized_order_items WHERE LEN(clean_seller_id) = 32  AND clean_seller_id LIKE '%[^0-9a-f]%'
-
-            -- Validity: order_item_id must be numeric (sequential integer per order)
-            UNION ALL
-            SELECT order_id, 'order_item_id' AS column_name, 'Invalid format: expected numeric value' AS issue, order_item_id AS raw_value
+            SELECT 'order_item_id', 'Invalid numeric format'
             FROM #normalized_order_items
             WHERE clean_order_item_id != '' AND clean_order_item_id LIKE '%[^0-9]%'
 
             -- Validity: datetime format
             UNION ALL
-            SELECT order_id, 'shipping_limit_date' AS column_name, 'Invalid datetime format' AS issue, shipping_limit_date AS raw_value
+            SELECT 'shipping_limit_date', 'Invalid datetime format'
             FROM #normalized_order_items
             WHERE shipping_limit_date IS NOT NULL AND parsed_shipping_date IS NULL
 
             -- Validity: decimal format
             UNION ALL
-            SELECT order_id, 'price'         AS column_name, 'Invalid decimal format' AS issue, price         AS raw_value FROM #normalized_order_items WHERE price IS NOT NULL         AND parsed_price IS NULL
+            SELECT 'price',         'Invalid decimal format' FROM #normalized_order_items WHERE price IS NOT NULL         AND parsed_price IS NULL
             UNION ALL
-            SELECT order_id, 'freight_value' AS column_name, 'Invalid decimal format' AS issue, freight_value AS raw_value FROM #normalized_order_items WHERE freight_value IS NOT NULL AND parsed_freight_value IS NULL
+            SELECT 'freight_value', 'Invalid decimal format' FROM #normalized_order_items WHERE freight_value IS NOT NULL AND parsed_freight_value IS NULL
 
-            -- Validity: price must be positive (free items don't exist in this dataset)
+            -- Validity: price must be positive
             UNION ALL
-            SELECT order_id, 'price' AS column_name, 'Invalid range: price must be > 0' AS issue, price AS raw_value
+            SELECT 'price', 'Invalid range: must be > 0'
             FROM #normalized_order_items
             WHERE parsed_price IS NOT NULL AND parsed_price <= 0
 
-            -- Uniqueness: duplicate composite key (order_id, order_item_id) within batch
+            -- Uniqueness: one row per duplicate occurrence so outer GROUP BY counts total
             UNION ALL
-            SELECT
-                order_id,
-                'order_id, order_item_id'                                                                              AS column_name,
-                'Duplicate (order_id, order_item_id) in batch: ' + CAST(COUNT(*) AS NVARCHAR) + ' occurrences'        AS issue,
-                order_item_id                                                                                          AS raw_value
-            FROM #normalized_order_items
-            GROUP BY order_id, order_item_id
-            HAVING COUNT(*) > 1
+            SELECT 'order_id, order_item_id', 'Duplicate (order_id, order_item_id) in batch'
+            FROM (SELECT COUNT(*) OVER (PARTITION BY order_id, order_item_id) AS cnt FROM #normalized_order_items) d
+            WHERE cnt > 1
+
         )
 
-        INSERT INTO audit.dq_log (batch_id, job_run_id, table_name, raw_key, column_name, issue, raw_value)
-        SELECT @batch_id, @job_run_id, 'order_items', order_id, column_name, issue, raw_value
-        FROM dq_checks;
+        INSERT INTO audit.dq_log (batch_id, job_run_id, table_name, column_name, issue, affected_row_count)
+        SELECT @batch_id, @job_run_id, 'order_items', column_name, issue, COUNT(*)
+        FROM dq_checks
+        GROUP BY column_name, issue;
 
         -- Abort if duplicates were detected.
         IF EXISTS (
@@ -175,16 +166,12 @@ BEGIN
         USING (
             SELECT *
             FROM hashed
-            WHERE clean_order_id IS NOT NULL
-              AND clean_order_item_id IS NOT NULL
-              AND clean_product_id IS NOT NULL
-              AND clean_seller_id IS NOT NULL
-              AND LEN(clean_order_id) = 32
-              AND LEN(clean_product_id) = 32
-              AND LEN(clean_seller_id) = 32
+            WHERE clean_order_id IS NOT NULL AND clean_order_id != ''       AND clean_order_id NOT LIKE '%[^0-9a-f]%'      AND LEN(clean_order_id) = 32
+              AND clean_product_id IS NOT NULL AND clean_product_id != ''     AND clean_product_id NOT LIKE '%[^0-9a-f]%'    AND LEN(clean_product_id) = 32
+              AND clean_seller_id IS NOT NULL AND clean_seller_id != ''      AND clean_seller_id NOT LIKE '%[^0-9a-f]%'     AND LEN(clean_seller_id) = 32
+              AND clean_order_item_id IS NOT NULL AND clean_order_item_id != ''  AND clean_order_item_id NOT LIKE '%[^0-9]%'
               AND parsed_shipping_date IS NOT NULL
               AND parsed_price IS NOT NULL
-              AND parsed_price > 0
               AND parsed_freight_value IS NOT NULL
         ) AS src
         ON tgt.order_id = src.clean_order_id AND tgt.order_item_id = src.clean_order_item_id

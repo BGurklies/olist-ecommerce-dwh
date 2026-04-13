@@ -38,6 +38,7 @@ BEGIN
         -- 1. Normalize raw data into a temp table so DQ checks and the MERGE
         --    share the same cleaned values without duplicating transformation logic.
         SELECT
+            row_id,
             customer_id,
             customer_unique_id,
             customer_zip_code_prefix,
@@ -53,69 +54,54 @@ BEGIN
         WHERE batch_id = @batch_id;
 
         -- 2. DQ checks: completeness, validity (length + format + range), uniqueness.
+        --    One dq_log row per distinct (column_name, issue) category with affected_row_count.
         WITH dq_checks AS (
 
             -- Completeness: NULL checks
-            SELECT customer_id, 'customer_id'              AS column_name, 'NULL value' AS issue, CAST(NULL AS NVARCHAR(MAX)) AS raw_value FROM #normalized_customers WHERE clean_customer_id IS NULL
+            SELECT 'customer_id'              AS column_name, 'NULL value' AS issue FROM #normalized_customers WHERE clean_customer_id IS NULL
             UNION ALL
-            SELECT customer_id, 'customer_unique_id'       AS column_name, 'NULL value' AS issue, CAST(NULL AS NVARCHAR(MAX)) AS raw_value FROM #normalized_customers WHERE clean_customer_unique_id IS NULL
+            SELECT 'customer_unique_id',       'NULL value'                         FROM #normalized_customers WHERE clean_customer_unique_id IS NULL
             UNION ALL
-            SELECT customer_id, 'customer_zip_code_prefix' AS column_name, 'NULL value' AS issue, CAST(NULL AS NVARCHAR(MAX)) AS raw_value FROM #normalized_customers WHERE clean_customer_zip_code_prefix IS NULL
+            SELECT 'customer_zip_code_prefix', 'NULL value'                         FROM #normalized_customers WHERE clean_customer_zip_code_prefix IS NULL
             UNION ALL
-            SELECT customer_id, 'customer_city'            AS column_name, 'NULL value' AS issue, CAST(NULL AS NVARCHAR(MAX)) AS raw_value FROM #normalized_customers WHERE clean_customer_city IS NULL
+            SELECT 'customer_city',            'NULL value'                         FROM #normalized_customers WHERE clean_customer_city IS NULL
             UNION ALL
-            SELECT customer_id, 'customer_state'           AS column_name, 'NULL value' AS issue, CAST(NULL AS NVARCHAR(MAX)) AS raw_value FROM #normalized_customers WHERE clean_customer_state IS NULL
+            SELECT 'customer_state',           'NULL value'                         FROM #normalized_customers WHERE clean_customer_state IS NULL
 
             -- Completeness: empty string checks after cleansing
             UNION ALL
-            SELECT customer_id, 'customer_id'              AS column_name, 'Empty string after cleansing' AS issue, customer_id              AS raw_value FROM #normalized_customers WHERE clean_customer_id = ''
+            SELECT 'customer_id',              'Empty string after cleansing'        FROM #normalized_customers WHERE clean_customer_id = ''
             UNION ALL
-            SELECT customer_id, 'customer_unique_id'       AS column_name, 'Empty string after cleansing' AS issue, customer_unique_id       AS raw_value FROM #normalized_customers WHERE clean_customer_unique_id = ''
+            SELECT 'customer_unique_id',       'Empty string after cleansing'        FROM #normalized_customers WHERE clean_customer_unique_id = ''
             UNION ALL
-            SELECT customer_id, 'customer_zip_code_prefix' AS column_name, 'Empty string after cleansing' AS issue, customer_zip_code_prefix  AS raw_value FROM #normalized_customers WHERE clean_customer_zip_code_prefix = ''
+            SELECT 'customer_zip_code_prefix', 'Empty string after cleansing'        FROM #normalized_customers WHERE clean_customer_zip_code_prefix = ''
             UNION ALL
-            SELECT customer_id, 'customer_city'            AS column_name, 'Empty string after cleansing' AS issue, customer_city            AS raw_value FROM #normalized_customers WHERE clean_customer_city = ''
+            SELECT 'customer_city',            'Empty string after cleansing'        FROM #normalized_customers WHERE clean_customer_city = ''
             UNION ALL
-            SELECT customer_id, 'customer_state'           AS column_name, 'Empty string after cleansing' AS issue, customer_state           AS raw_value FROM #normalized_customers WHERE clean_customer_state = ''
+            SELECT 'customer_state',           'Empty string after cleansing'        FROM #normalized_customers WHERE clean_customer_state = ''
 
-            -- Validity: length checks (empty strings excluded to avoid double-reporting)
+            -- Validity: format and length checks
             UNION ALL
-            SELECT customer_id, 'customer_id'              AS column_name, 'Invalid length after cleansing: ' + CAST(LEN(clean_customer_id) AS NVARCHAR)              AS issue, customer_id              AS raw_value FROM #normalized_customers WHERE clean_customer_id != ''              AND LEN(clean_customer_id) != 32
+            SELECT 'customer_id',              'Invalid length or format: expected 32-char lowercase hex' FROM #normalized_customers WHERE clean_customer_id != ''              AND (LEN(clean_customer_id) != 32 OR clean_customer_id LIKE '%[^0-9a-f]%')
             UNION ALL
-            SELECT customer_id, 'customer_unique_id'       AS column_name, 'Invalid length after cleansing: ' + CAST(LEN(clean_customer_unique_id) AS NVARCHAR)       AS issue, customer_unique_id       AS raw_value FROM #normalized_customers WHERE clean_customer_unique_id != ''       AND LEN(clean_customer_unique_id) != 32
+            SELECT 'customer_unique_id',       'Invalid length or format: expected 32-char lowercase hex' FROM #normalized_customers WHERE clean_customer_unique_id != ''       AND (LEN(clean_customer_unique_id) != 32 OR clean_customer_unique_id LIKE '%[^0-9a-f]%')
             UNION ALL
-            SELECT customer_id, 'customer_zip_code_prefix' AS column_name, 'Invalid length after cleansing: ' + CAST(LEN(clean_customer_zip_code_prefix) AS NVARCHAR) AS issue, customer_zip_code_prefix  AS raw_value FROM #normalized_customers WHERE clean_customer_zip_code_prefix != '' AND LEN(clean_customer_zip_code_prefix) != 5
+            SELECT 'customer_zip_code_prefix', 'Invalid length or format: expected 5 numeric digits'  FROM #normalized_customers WHERE clean_customer_zip_code_prefix != '' AND (LEN(clean_customer_zip_code_prefix) != 5 OR clean_customer_zip_code_prefix LIKE '%[^0-9]%')
             UNION ALL
-            SELECT customer_id, 'customer_state'           AS column_name, 'Invalid length after cleansing: ' + CAST(LEN(clean_customer_state) AS NVARCHAR)           AS issue, customer_state           AS raw_value FROM #normalized_customers WHERE clean_customer_state != ''           AND LEN(clean_customer_state) != 2
+            SELECT 'customer_state',           'Invalid length or format: expected 2 uppercase letters'  FROM #normalized_customers WHERE clean_customer_state != ''           AND (LEN(clean_customer_state) != 2 OR clean_customer_state LIKE '%[^A-Z]%')
 
-            -- Validity: format checks (applied only to rows that passed length validation)
-            -- customer_id and customer_unique_id are MD5 hashes: 32 lowercase hex chars
+            -- Uniqueness: one row per duplicate occurrence so outer GROUP BY counts total
             UNION ALL
-            SELECT customer_id, 'customer_id'              AS column_name, 'Invalid format: expected 32-char lowercase hex' AS issue, customer_id             AS raw_value FROM #normalized_customers WHERE LEN(clean_customer_id) = 32              AND clean_customer_id LIKE '%[^0-9a-f]%'
-            UNION ALL
-            SELECT customer_id, 'customer_unique_id'       AS column_name, 'Invalid format: expected 32-char lowercase hex' AS issue, customer_unique_id      AS raw_value FROM #normalized_customers WHERE LEN(clean_customer_unique_id) = 32       AND clean_customer_unique_id LIKE '%[^0-9a-f]%'
-            -- customer_zip_code_prefix: Brazilian CEP prefix — 5 numeric digits
-            UNION ALL
-            SELECT customer_id, 'customer_zip_code_prefix' AS column_name, 'Invalid format: expected 5 numeric digits'      AS issue, customer_zip_code_prefix AS raw_value FROM #normalized_customers WHERE LEN(clean_customer_zip_code_prefix) = 5  AND clean_customer_zip_code_prefix LIKE '%[^0-9]%'
-            -- customer_state: Brazilian state/district code — 2 uppercase letters
-            UNION ALL
-            SELECT customer_id, 'customer_state'           AS column_name, 'Invalid format: expected 2 uppercase letters'   AS issue, customer_state          AS raw_value FROM #normalized_customers WHERE LEN(clean_customer_state) = 2            AND clean_customer_state LIKE '%[^A-Z]%'
+            SELECT 'customer_id', 'Duplicate customer_id in batch'
+            FROM (SELECT COUNT(*) OVER (PARTITION BY customer_id) AS cnt FROM #normalized_customers) d
+            WHERE cnt > 1
 
-            -- Uniqueness: duplicate customer_id within batch
-            UNION ALL
-            SELECT
-                customer_id,
-                'customer_id'                                                                      AS column_name,
-                'Duplicate customer_id in batch: ' + CAST(COUNT(*) AS NVARCHAR) + ' occurrences'  AS issue,
-                customer_id                                                                        AS raw_value
-            FROM #normalized_customers
-            GROUP BY customer_id
-            HAVING COUNT(*) > 1
         )
 
-        INSERT INTO audit.dq_log (batch_id, job_run_id, table_name, raw_key, column_name, issue, raw_value)
-        SELECT @batch_id, @job_run_id, 'customers', customer_id, column_name, issue, raw_value
-        FROM dq_checks;
+        INSERT INTO audit.dq_log (batch_id, job_run_id, table_name, column_name, issue, affected_row_count)
+        SELECT @batch_id, @job_run_id, 'customers', column_name, issue, COUNT(*)
+        FROM dq_checks
+        GROUP BY column_name, issue;
 
         -- Abort if duplicates were detected.
         IF EXISTS (
@@ -151,16 +137,11 @@ BEGIN
         USING (
             SELECT *
             FROM hashed
-            WHERE clean_customer_id IS NOT NULL
-              AND clean_customer_unique_id IS NOT NULL
-              AND clean_customer_zip_code_prefix IS NOT NULL
-              AND clean_customer_city IS NOT NULL
-              AND clean_customer_state IS NOT NULL
-              AND LEN(clean_customer_id) = 32
-              AND LEN(clean_customer_unique_id) = 32
-              AND LEN(clean_customer_zip_code_prefix) = 5
-              AND LEN(clean_customer_city) > 0
-              AND LEN(clean_customer_state) = 2
+            WHERE clean_customer_id IS NOT NULL AND clean_customer_id != '' AND clean_customer_id NOT LIKE '%[^0-9a-f]%'          AND LEN(clean_customer_id) = 32
+              AND clean_customer_unique_id IS NOT NULL AND clean_customer_unique_id != '' AND clean_customer_unique_id NOT LIKE '%[^0-9a-f]%'   AND LEN(clean_customer_unique_id) = 32
+              AND clean_customer_zip_code_prefix IS NOT NULL AND clean_customer_zip_code_prefix != '' AND clean_customer_zip_code_prefix NOT LIKE '%[^0-9]%' AND LEN(clean_customer_zip_code_prefix) = 5
+              AND clean_customer_city IS NOT NULL            AND clean_customer_city != ''
+              AND clean_customer_state IS NOT NULL           AND clean_customer_state != '' AND clean_customer_state NOT LIKE '%[^A-Z]%'           AND LEN(clean_customer_state) = 2
         ) AS src
         ON tgt.customer_id = src.clean_customer_id
         -- Data changed or row is reactivating after a soft delete
