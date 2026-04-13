@@ -72,13 +72,13 @@ BEGIN
             BULK INSERT #customers_staging
             FROM ''' + REPLACE(@file_path, '''', '''''') + '''
             WITH (
-                FIRSTROW = 2,
-                FIELDTERMINATOR = '','',
+                FIRSTROW        = 2,
+                FIELDTERMINATOR = ''|'',
                 ROWTERMINATOR   = ''0x0a'',
                 CODEPAGE        = ''65001''
             );';
 
-        EXEC sp_executesql @sql;
+        EXEC (@sql);
 
         INSERT INTO raw.customers (
             batch_id,    customer_id,              customer_unique_id,

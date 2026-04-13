@@ -71,13 +71,13 @@ BEGIN
             BULK INSERT #sellers_staging
             FROM ''' + REPLACE(@file_path, '''', '''''') + '''
             WITH (
-                FIRSTROW = 2,
-                FIELDTERMINATOR = '','',
+                FIRSTROW        = 2,
+                FIELDTERMINATOR = ''|'',
                 ROWTERMINATOR   = ''0x0a'',
                 CODEPAGE        = ''65001''
             );';
 
-        EXEC sp_executesql @sql;
+        EXEC(@sql);
 
         INSERT INTO raw.sellers (
             batch_id,    seller_id,   seller_zip_code_prefix,
