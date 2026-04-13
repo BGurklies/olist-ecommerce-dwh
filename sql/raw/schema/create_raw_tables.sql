@@ -95,7 +95,7 @@ CREATE TABLE raw.[order_reviews] (
     [order_id]                 NVARCHAR(255),
     [review_score]             NVARCHAR(255),
     [review_comment_title]     NVARCHAR(255),
-    [review_comment_message]   NVARCHAR(255),
+    [review_comment_message]   NVARCHAR(MAX),
     [review_creation_date]     NVARCHAR(255),
     [review_answer_timestamp]  NVARCHAR(255),
     [load_ts]                  DATETIME2(3)        NOT NULL DEFAULT SYSUTCDATETIME(),
