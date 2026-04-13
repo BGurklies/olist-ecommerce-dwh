@@ -60,6 +60,8 @@ BEGIN
             OR @file_path LIKE '%''%'
             THROW 50003, 'Invalid file_path: must be a .csv path without semicolons or quotes', 1;
 
+        -- Input file is pipe-delimited, produced by preprocess_all.ps1 using
+        -- TextFieldParser. Preprocessing handles quoted city values containing commas.
         CREATE TABLE #geolocation_staging (
             geolocation_zip_code_prefix NVARCHAR(255),
             geolocation_lat             NVARCHAR(255),
@@ -72,13 +74,13 @@ BEGIN
             BULK INSERT #geolocation_staging
             FROM ''' + REPLACE(@file_path, '''', '''''') + '''
             WITH (
-                FIRSTROW = 2,
-                FIELDTERMINATOR = '','',
+                FIRSTROW        = 2,
+                FIELDTERMINATOR = ''|'',
                 ROWTERMINATOR   = ''0x0a'',
                 CODEPAGE        = ''65001''
             );';
 
-        EXEC sp_executesql @sql;
+        EXEC(@sql);
 
         INSERT INTO raw.geolocation (
             batch_id,    geolocation_zip_code_prefix, geolocation_lat,

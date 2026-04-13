@@ -60,12 +60,15 @@ BEGIN
             OR @file_path LIKE '%''%'
             THROW 50003, 'Invalid file_path: must be a .csv path without semicolons or quotes', 1;
 
+        -- Input file is pipe-delimited, produced by preprocess_all.ps1 using
+        -- TextFieldParser. Preprocessing handles review_comment_message values
+        -- containing commas and embedded newlines within quoted fields.
         CREATE TABLE #order_reviews_staging (
             review_id               NVARCHAR(255),
             order_id                NVARCHAR(255),
             review_score            NVARCHAR(255),
             review_comment_title    NVARCHAR(255),
-            review_comment_message  NVARCHAR(255),
+            review_comment_message  NVARCHAR(MAX),
             review_creation_date    NVARCHAR(255),
             review_answer_timestamp NVARCHAR(255)
         );
@@ -74,13 +77,13 @@ BEGIN
             BULK INSERT #order_reviews_staging
             FROM ''' + REPLACE(@file_path, '''', '''''') + '''
             WITH (
-                FORMAT     = ''CSV'',
-                FIRSTROW   = 2,
-                FIELDQUOTE = ''"'',
-                CODEPAGE   = ''65001''
+                FIRSTROW        = 2,
+                FIELDTERMINATOR = ''|'',
+                ROWTERMINATOR   = ''0x0a'',
+                CODEPAGE        = ''65001''
             );';
 
-        EXEC sp_executesql @sql;
+        EXEC(@sql);
 
         INSERT INTO raw.order_reviews (
             batch_id,     review_id,             order_id,
