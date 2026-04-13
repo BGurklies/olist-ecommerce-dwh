@@ -8,13 +8,14 @@ Schritt-für-Schritt-Anleitung zur vollständigen Einrichtung des Data Warehouse
 
 - MS SQL Server (Developer Edition oder höher)
 - SSMS 19+
+- PowerShell 5.1+
 - Olist-Datensatz lokal verfügbar → [Kaggle Download](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
 
 ---
 
 ## Ausführungsreihenfolge
 
-Alle Skripte werden in SSMS ausgeführt. Die Reihenfolge ist zwingend — spätere Skripte referenzieren Objekte aus früheren.
+Alle SQL-Skripte werden in SSMS ausgeführt. Die Reihenfolge ist zwingend — spätere Skripte referenzieren Objekte aus früheren.
 
 ### 1. Datenbank anlegen
 
@@ -27,7 +28,7 @@ CREATE DATABASE OlistDWH;
 ### 2. Schemas anlegen
 
 ```
-sql/create_schemas.sql
+sql/setup/create_schemas.sql
 ```
 
 Legt die Schemas `raw`, `cleansed`, `mart`, `audit`, `orchestration` an.
@@ -54,14 +55,14 @@ sql/orchestration/schema/create_orchestration_triggers.sql
 ```
 sql/raw/schema/create_raw_tables.sql
 ```
-
-Enthält alle `CREATE TABLE` Definitionen sowie die zugehörigen Non-Clustered Indexes auf `batch_id`.
+Enthält alle `CREATE TABLE`-Definitionen der RAW-Layer.
 
 ### 6. Cleansed-Tabellen
 
 ```
 sql/cleansed/schema/create_cleansed_tables.sql
 ```
+Enthält alle `CREATE TABLE`-Definitionen der CLEANSED-Layer.
 
 ### 7. Mart-Tabellen
 
@@ -81,6 +82,11 @@ sql/raw/procedures/raw_sp_load_customers.sql
 sql/raw/procedures/raw_sp_load_orders.sql
 sql/raw/procedures/raw_sp_load_order_items.sql
 sql/raw/procedures/raw_sp_load_order_payments.sql
+sql/raw/procedures/raw_sp_load_order_reviews.sql
+sql/raw/procedures/raw_sp_load_products.sql
+sql/raw/procedures/raw_sp_load_sellers.sql
+sql/raw/procedures/raw_sp_load_geolocation.sql
+sql/raw/procedures/raw_sp_load_product_category_name_translation.sql
 ```
 
 **CLEANSED:**
@@ -88,6 +94,12 @@ sql/raw/procedures/raw_sp_load_order_payments.sql
 sql/cleansed/procedures/cleansed_sp_load_customers.sql
 sql/cleansed/procedures/cleansed_sp_load_orders.sql
 sql/cleansed/procedures/cleansed_sp_load_order_items.sql
+sql/cleansed/procedures/cleansed_sp_load_order_payments.sql
+sql/cleansed/procedures/cleansed_sp_load_order_reviews.sql
+sql/cleansed/procedures/cleansed_sp_load_products.sql
+sql/cleansed/procedures/cleansed_sp_load_sellers.sql
+sql/cleansed/procedures/cleansed_sp_load_geolocation.sql
+sql/cleansed/procedures/cleansed_sp_load_product_category_name_translation.sql
 ```
 
 **Orchestrierung:**
@@ -102,13 +114,10 @@ sql/orchestration/procedures/orchestration_sp_run_full_load.sql
 sql/orchestration/config/dev_pipeline_config.sql
 ```
 
-**Vor der Ausführung:** `@DatasetRoot` in Zeile 11 auf den lokalen Ordner mit den Olist-CSV-Dateien setzen (abschließender Backslash erforderlich):
-
-```sql
-DECLARE @DatasetRoot NVARCHAR(500) = 'C:\Dein\Pfad\olist_data\';
-```
+**Vor der Ausführung:** `@DatasetRoot` auf den lokalen Ordner mit den Olist-CSV-Dateien setzen.
 
 Das Skript ist idempotent — bereits vorhandene Einträge werden übersprungen.
+
 
 ### 10. SQL Server Agent Job registrieren (optional)
 
@@ -116,15 +125,13 @@ Das Skript ist idempotent — bereits vorhandene Einträge werden übersprungen.
 sql/orchestration/jobs/agent_job_full_load.sql
 ```
 
-Registriert einen Agent Job `OlistDWH_FullLoad`, der `orchestration.sp_run_full_load` aufruft. Nur relevant wenn der Job über den SQL Server Agent geplant werden soll.
+**Vor der Ausführung:** `@ScriptRoot` in Zeile 24 auf den lokalen Pfad zum `scripts/ps`-Ordner setzen.
 
-### 11. Migrations ausführen
+Registriert den Agent Job `OlistDWH_Orchestration_FullLoad_Daily` mit zwei Steps:
+1. **Preprocess CSVs** (CmdExec) — ruft `preprocess_all.ps1` auf, konvertiert Quelldateien mit `needs_preprocessing = 1` von comma- nach pipe-delimited
+2. **Execute Full Load Pipeline** (T-SQL) — ruft `orchestration.sp_run_full_load` auf
 
-```
-sql/migrations/V001__disable_non_customers_pipelines.sql
-```
-
-Setzt alle Pipelines außer `customers` auf `is_active = 0` — während der Entwicklung werden nur die bereits implementierten Entities aktiviert.
+Nur relevant wenn der Job über den SQL Server Agent geplant werden soll.
 
 ---
 
@@ -133,7 +140,6 @@ Setzt alle Pipelines außer `customers` auf `is_active = 0` — während der Ent
 Nach dem Setup kann der vollständige Lauf direkt in SSMS ausgelöst werden:
 
 ```sql
-USE OlistDWH;
 EXEC orchestration.sp_run_full_load @triggered_by = 'MANUAL';
 ```
 
@@ -156,19 +162,53 @@ FROM orchestration.pipeline_config;
 
 Letzter Job-Lauf:
 ```sql
-SELECT TOP 1 * FROM audit.job_log ORDER BY start_ts DESC;
+SELECT TOP 1 * FROM audit.job_log
+ORDER BY start_ts DESC;
 ```
 
-DQ-Probleme eines Batches:
+Alle Loads des letzten Job-Laufs:
 ```sql
-SELECT table_name, column_name, issue, raw_value, COUNT(*) AS occurrences
-FROM audit.dq_log
-WHERE batch_id = '<batch_id>'
-GROUP BY table_name, column_name, issue, raw_value
-ORDER BY table_name, occurrences DESC;
+WITH last_job_run AS (
+	SELECT TOP 1 job_run_id
+	FROM audit.job_log
+	ORDER BY start_ts DESC
+)
+SELECT * FROM audit.load_log
+WHERE job_run_id = (SELECT job_run_id FROM last_job_run);
+```
+
+Fehler des letzten Job-Laufs:
+```sql
+WITH last_job_run AS (
+	SELECT TOP 1 job_run_id
+	FROM audit.job_log
+	ORDER BY start_ts DESC
+)
+SELECT * FROM audit.error_log
+WHERE job_run_id = (SELECT job_run_id FROM last_job_run);
 ```
 
 Fehler eines Batches:
 ```sql
-SELECT * FROM audit.error_log WHERE batch_id = '<batch_id>';
+SELECT * FROM audit.error_log
+WHERE batch_id = '<batch_id>';
+```
+
+DQ-Probleme des letzten Job-Laufs:
+```sql
+WITH last_job_run AS (
+	SELECT TOP 1 job_run_id
+	FROM audit.job_log
+	ORDER BY start_ts DESC
+)
+SELECT * FROM audit.dq_log
+WHERE job_run_id = (SELECT job_run_id FROM last_job_run);
+```
+
+DQ-Probleme eines Batches:
+```sql
+SELECT table_name, column_name, issue, affected_row_count
+FROM audit.dq_log
+WHERE batch_id = '<batch_id>'
+ORDER BY table_name, affected_row_count DESC;
 ```

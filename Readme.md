@@ -13,6 +13,13 @@ CSV-Dateien
     │
     ▼
 ┌────────────────────────────────────────────────────────────────────┐
+│  PREPROCESSING                                                     │
+│  preprocess_all.ps1  (needs_preprocessing = 1)                     │
+│  Konvertierung: comma-delimited → pipe-delimited                   │
+└────────────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌────────────────────────────────────────────────────────────────────┐
 │  RAW                                                               │
 │  Append-Only Staging · Batch-Historisierung · keine Transformation │
 │  Metafelder: batch_id, load_ts, file_name                          │
@@ -45,6 +52,12 @@ CSV-Dateien
 
 ## Pipeline-Design
 
+### Preprocessing — CSV-Konvertierung
+
+Einige Quelldateien enthalten in Feldern eingebettete Kommas oder Zeilenumbrüche (z.B. Geodaten, Bewertungstexte), die `BULK INSERT` auf SQL Server on-premises nicht korrekt verarbeiten kann (`IID_IColumnsInfo` OLE DB-Einschränkung). Für diese Dateien führt `preprocess_all.ps1` vor dem RAW-Load eine Konvertierung durch: comma-delimited mit gequoteten Feldern → pipe-delimited ohne Quoting.
+
+Welche Pipelines vorverarbeitet werden, steuert die Spalte `needs_preprocessing = 1` in `orchestration.pipeline_config`. Das Preprocessing wird nur ausgeführt, wenn die Quelldatei seit dem letzten erfolgreichen RAW-Load geändert wurde (`LastWriteTimeUtc > last_success_ts` aus `audit.load_log`). Unveränderte Dateien werden übersprungen. Die Ausgabedateien werden bei jedem Lauf überschrieben — es findet keine Akkumulation statt.
+
 ### Raw — Append-Only Staging mit Batch-Historisierung
 
 Jeder Load erhält eine eindeutige `batch_id` (GUID), die allen Zeilen des Batches zugewiesen wird. Die raw-Tabellen wachsen mit jedem Load — Historisierung auf Batch-Ebene ist damit vollständig gewährleistet. Non-Clustered Indexes auf `batch_id` stellen sicher, dass der `WHERE batch_id = @batch_id`-Filter in den CLEANSED-SPs als Index Seek ausgeführt wird.
@@ -66,10 +79,10 @@ Vor jedem MERGE läuft eine CTE-basierte DQ-Prüfung über drei Dimensionen:
 | Dimension | Prüfungen |
 |---|---|
 | **Completeness** | NULL-Werte, leere Strings nach Bereinigung |
-| **Validity** | Länge, Format (Hex-IDs, numerische Felder, Datumsformat), Wertemenge (z.B. `order_status`), logische Konsistenz (z.B. Lieferdatum vor Kaufdatum) |
+| **Validity** | Länge, Format (Hex-IDs, numerische Felder, Datumsformat), Wertemenge (z.B. `payment_type`), logische Konsistenz (z.B. Lieferdatum vor Kaufdatum) |
 | **Uniqueness** | Duplikate des Primärschlüssels innerhalb eines Batches |
 
-Ergebnisse werden in `audit.dq_log` geschrieben. Bei Duplikaten wird der MERGE mit einem expliziten `THROW` abgebrochen.
+Ergebnisse werden aggregiert in `audit.dq_log` geschrieben — eine Zeile pro `(column_name, issue)`-Kategorie mit `affected_row_count`. Bei strukturellen Duplikaten (eindeutiger PK verletzt) wird der MERGE mit einem expliziten `THROW` abgebrochen. Bekannte Quelldaten-Duplikate (z.B. `review_id`) werden geloggt und durch `ROW_NUMBER()` dedupliziert, lösen aber keinen Abbruch aus.
 
 ### Transaktionsmanagement
 
@@ -81,11 +94,12 @@ Der Kern der Orchestrierung ist die Tabelle `orchestration.pipeline_config` — 
 
 ```
 pipeline_config
-├── sp_name            → welche SP wird aufgerufen
-├── source_pipeline_id → FK auf die upstream RAW-Pipeline
+├── sp_name               → welche SP wird aufgerufen
+├── source_pipeline_id    → FK auf die upstream RAW-Pipeline
 ├── file_path / file_name → Quelldatei
-├── load_sequence      → Ausführungsreihenfolge innerhalb eines Layers
-├── is_active          → Pipeline ein-/ausschaltbar
+├── needs_preprocessing   → ob preprocess_all.ps1 die Datei vorverarbeiten soll
+├── load_sequence         → Ausführungsreihenfolge innerhalb eines Layers
+├── is_active             → Pipeline ein-/ausschaltbar
 └── last_run_status / last_batch_id → Laufzeitstatus, wird nach jedem Load aktualisiert
 ```
 
@@ -96,7 +110,7 @@ Das Seeding erfolgt über `dev_pipeline_config.sql` — in einer produktiven Umg
 - `orchestration.sp_run_full_load` — startet einen vollständigen Lauf über alle Layer, schreibt in `audit.job_log`
 - `orchestration.sp_run_layer` — iteriert über alle aktiven Pipelines eines Layers (Cursor, `load_sequence`-Reihenfolge)
 
-Der SQL Server Agent Job (`agent_job_full_load.sql`) ruft `sp_run_full_load` auf und ermöglicht automatisiertes Scheduling des vollständigen Pipeline-Laufs — täglich, wöchentlich oder nach individueller Konfiguration — ohne manuellen Eingriff.
+Der SQL Server Agent Job (`agent_job_full_load.sql`) enthält zwei Steps: Preprocessing via `preprocess_all.ps1` (CmdExec) gefolgt von `sp_run_full_load` (T-SQL). Ermöglicht automatisiertes Scheduling ohne manuellen Eingriff.
 
 ---
 
@@ -122,24 +136,29 @@ Der SQL Server Agent Job (`agent_job_full_load.sql`) ruft `sp_run_full_load` auf
 
 ```
 olist-ecommerce-dwh/
+├── data/
+├── analysis/
+│   └── eda/
+│       ├── eda_customers.sql
+│       ├── eda_orders.sql
+│       └── ...
+├── scripts/
+│   ├── ps/
+│   │   └── preprocess_all.ps1
+│   └── python/
+│       └── generate_create_tables.py
 ├── sql/
-│   ├── create_schemas.sql
-│   ├── migrations/
-│   │   ├── V001__disable_non_customers_pipelines.sql
-│   │   └── ...
+│   ├── setup/
+│   │   └── create_schemas.sql
 │   ├── audit/
 │   │   └── schema/
 │   │       └── create_audit_tables.sql
 │   ├── raw/
 │   │   ├── schema/
 │   │   │   └── create_raw_tables.sql
-│   │   ├── procedures/
-│   │   │   ├── raw_sp_load_customers.sql
-│   │   │   ├── raw_sp_load_orders.sql
-│   │   │   └── ...
-│   │   └── eda/
-│   │       ├── eda_customers.sql
-│   │       ├── eda_orders.sql
+│   │   └── procedures/
+│   │       ├── raw_sp_load_customers.sql
+│   │       ├── raw_sp_load_orders.sql
 │   │       └── ...
 │   ├── cleansed/
 │   │   ├── schema/
@@ -149,19 +168,23 @@ olist-ecommerce-dwh/
 │   │       ├── cleansed_sp_load_orders.sql
 │   │       └── ...
 │   ├── mart/    # in Entwicklung
-│   └── orchestration/
-│       ├── schema/
-│       │   ├── create_orchestration_tables.sql
-│       │   └── create_orchestration_triggers.sql
-│       ├── procedures/
-│       │   ├── orchestration_sp_run_full_load.sql
-│       │   └── orchestration_sp_run_layer.sql
-│       ├── config/
-│       │   └── dev_pipeline_config.sql
-│       └── jobs/
-│           └── agent_job_full_load.sql
-└── python/
-    └── generate_create_tables.py
+│   │   └── schema/
+│   │       └── create_mart_tables.sql
+│   ├── orchestration/
+│   │   ├── schema/
+│   │   │   ├── create_orchestration_tables.sql
+│   │   │   └── create_orchestration_triggers.sql
+│   │   ├── procedures/
+│   │   │   ├── orchestration_sp_run_full_load.sql
+│   │   │   └── orchestration_sp_run_layer.sql
+│   │   ├── config/
+│   │   │   └── dev_pipeline_config.sql
+│   │   └── jobs/
+│   │       └── agent_job_full_load.sql
+│   └── migrations/
+│       ├── V001__disable_non_customers_pipelines.sql
+│       ├── V002_activate_pipelines_for_orders_and_order_items.sql
+│       └── ...
 ```
 
 ---
@@ -173,6 +196,7 @@ olist-ecommerce-dwh/
 | **MS SQL Server** | Datenbank, gesamte Pipeline-Logik |
 | **SSMS** | Entwicklung, Testing, lokale Ausführung |
 | **SQL Server Agent** | Job-Scheduling (produktive Ausführung) |
+| **PowerShell** | CSV-Vorverarbeitung  |
 | **Python** | DDL-Generierung |
 | **Git / GitHub** | Versionierung |
 
@@ -184,10 +208,9 @@ olist-ecommerce-dwh/
 |---|---|
 | Schemas & Audit-Tabellen | Abgeschlossen |
 | Orchestrierung (pipeline_config, Agent Job) | Abgeschlossen |
-| RAW-Layer: Stored Procedures und EDAs (alle Entitäten) | Abgeschlossen |
-| CLEANSED-Layer: customers, orders, order_items | Abgeschlossen |
-| CLEANSED-Layer: verbleibende 6 Entitäten | In Entwicklung |
-| MART-Layer | Geplant |
+| RAW-Layer: Stored Procedures und EDAs (alle 9 Entitäten) | Abgeschlossen |
+| CLEANSED-Layer: alle 9 Entitäten | Abgeschlossen |
+| MART-Layer | In Entwicklung |
 | Power BI Reporting | Geplant |
 
 ---
