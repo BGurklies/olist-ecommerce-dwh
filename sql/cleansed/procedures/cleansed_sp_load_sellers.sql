@@ -37,19 +37,54 @@ BEGIN
 
         -- 1. Normalize raw data into a temp table so DQ checks and the MERGE
         --    share the same cleaned values without duplicating transformation logic.
+        --    Three-stage CTE:
+        --      'normalized' — computes clean values once from raw.
+        --      'hashed'     — computes row_hash once; reused in both DQ checks and MERGE.
+        --      'ranked'     — applies ROW_NUMBER() for deduplication on seller_id.
+        --    Duplicate handling distinguishes two types logged separately to dq_log:
+        --      Type A — same seller_id, identical content (hash match): load artefact,
+        --               deduplicated silently.
+        --      Type B — same seller_id, conflicting content (hash mismatch): data quality
+        --               conflict, aborts — investigate dq_log before reloading.
+        ;WITH normalized AS (
+            SELECT
+                seller_id,
+                seller_zip_code_prefix,
+                seller_city,
+                seller_state,
+                REPLACE(TRIM(seller_id),               '"', '') AS clean_seller_id,
+                REPLACE(TRIM(seller_zip_code_prefix),   '"', '') AS clean_seller_zip_code_prefix,
+                dbo.fn_normalize_text(seller_city)               AS clean_seller_city,
+                dbo.fn_normalize_text(seller_state)              AS clean_seller_state
+            FROM raw.sellers
+            WHERE batch_id = @batch_id
+        ),
+        hashed AS (
+            SELECT
+                *,
+                HASHBYTES('SHA2_256', CONCAT(
+                    clean_seller_id,              '|',
+                    clean_seller_zip_code_prefix, '|',
+                    clean_seller_city,            '|',
+                    clean_seller_state
+                )) AS row_hash
+            FROM normalized
+        ),
+        ranked AS (
+            SELECT
+                *,
+                ROW_NUMBER() OVER (
+                    PARTITION BY clean_seller_id
+                    ORDER BY clean_seller_zip_code_prefix, clean_seller_city
+                ) AS rn
+            FROM hashed
+        )
         SELECT
-            row_id,
-            seller_id,
-            seller_zip_code_prefix,
-            seller_city,
-            seller_state,
-            REPLACE(TRIM(seller_id),              '"', '') AS clean_seller_id,
-            REPLACE(TRIM(seller_zip_code_prefix),  '"', '') AS clean_seller_zip_code_prefix,
-            TRIM(seller_city)                              AS clean_seller_city,
-            TRIM(seller_state)                             AS clean_seller_state
+            seller_id, seller_zip_code_prefix, seller_city, seller_state,
+            clean_seller_id, clean_seller_zip_code_prefix, clean_seller_city, clean_seller_state,
+            row_hash, rn
         INTO #normalized_sellers
-        FROM raw.sellers
-        WHERE batch_id = @batch_id;
+        FROM ranked;
 
         -- 2. DQ checks: completeness, validity (length + format), uniqueness.
         --    One dq_log row per distinct (column_name, issue) category with affected_row_count.
@@ -78,15 +113,33 @@ BEGIN
             UNION ALL
             SELECT 'seller_id',              'Invalid length or format: expected 32-char lowercase hex' FROM #normalized_sellers WHERE clean_seller_id != ''              AND (LEN(clean_seller_id) != 32 OR clean_seller_id LIKE '%[^0-9a-f]%')
             UNION ALL
-            SELECT 'seller_zip_code_prefix', 'Invalid length or format: expected 5 numeric digits'  FROM #normalized_sellers WHERE clean_seller_zip_code_prefix != '' AND (LEN(clean_seller_zip_code_prefix) != 5 OR clean_seller_zip_code_prefix LIKE '%[^0-9]%')
+            SELECT 'seller_zip_code_prefix', 'Invalid length or format: expected 5 numeric digits'     FROM #normalized_sellers WHERE clean_seller_zip_code_prefix != '' AND (LEN(clean_seller_zip_code_prefix) != 5 OR clean_seller_zip_code_prefix LIKE '%[^0-9]%')
             UNION ALL
             SELECT 'seller_state',           'Invalid length or format: expected 2 uppercase letters'  FROM #normalized_sellers WHERE clean_seller_state != ''           AND (LEN(clean_seller_state) != 2 OR clean_seller_state LIKE '%[^A-Z]%')
 
-            -- Uniqueness: one row per duplicate occurrence so outer GROUP BY counts total
+            -- Duplicates Type A: same seller_id, identical content (hash match) — load artefact
             UNION ALL
-            SELECT 'seller_id', 'Duplicate seller_id in batch'
-            FROM (SELECT COUNT(*) OVER (PARTITION BY seller_id) AS cnt FROM #normalized_sellers) d
-            WHERE cnt > 1
+            SELECT 'seller_id', 'Duplicate seller_id: identical content, deduplicated silently'
+            FROM #normalized_sellers n
+            WHERE rn > 1
+              AND EXISTS (
+                  SELECT 1 FROM #normalized_sellers canon
+                  WHERE canon.clean_seller_id = n.clean_seller_id
+                    AND canon.rn              = 1
+                    AND canon.row_hash        = n.row_hash
+              )
+
+            -- Duplicates Type B: same seller_id, conflicting content (hash mismatch) — data quality conflict
+            UNION ALL
+            SELECT 'seller_id', 'Duplicate seller_id: conflicting content — investigate before reload'
+            FROM #normalized_sellers n
+            WHERE rn > 1
+              AND NOT EXISTS (
+                  SELECT 1 FROM #normalized_sellers canon
+                  WHERE canon.clean_seller_id = n.clean_seller_id
+                    AND canon.rn              = 1
+                    AND canon.row_hash        = n.row_hash
+              )
 
         )
 
@@ -95,44 +148,32 @@ BEGIN
         FROM dq_checks
         GROUP BY column_name, issue;
 
-        -- Abort if duplicates were detected.
+        -- Abort on Type B duplicates: conflicting content under the same seller_id cannot be
+        -- resolved deterministically.
         IF EXISTS (
             SELECT 1 FROM audit.dq_log
             WHERE batch_id    = @batch_id
               AND table_name  = 'sellers'
               AND column_name = 'seller_id'
-              AND issue LIKE 'Duplicate%'
+              AND issue LIKE 'Duplicate seller_id: conflicting content%'
         )
-            THROW 50004, 'Duplicate seller_id values detected in batch. Investigate dq_log before reloading.', 1;
+            THROW 50005, 'Conflicting duplicate seller_id values detected in batch. Investigate dq_log before reloading.', 1;
 
-        -- 3. Incremental upsert + soft delete via MERGE. row_hash detects changed rows
-        --    to avoid unnecessary updates. Rows absent from the current batch are soft-
-        --    deleted (is_deleted = 1) rather than removed. Reappearing rows are reactivated.
+        -- 3. Incremental upsert + soft delete via MERGE. row_hash is pre-computed in the
+        --    temp table and reused here. Only rn = 1 rows (canonical per seller_id) enter the MERGE as source.
         BEGIN TRANSACTION;
-        ;WITH hashed AS (
-            SELECT
-                clean_seller_id,
-                clean_seller_zip_code_prefix,
-                clean_seller_city,
-                clean_seller_state,
-                HASHBYTES('SHA2_256', CONCAT(
-                    clean_seller_id,             '|',
-                    clean_seller_zip_code_prefix, '|',
-                    clean_seller_city,            '|',
-                    clean_seller_state
-                )) AS row_hash
-            FROM #normalized_sellers
-        )
         MERGE cleansed.sellers AS tgt
         USING (
             SELECT *
-            FROM hashed
-            WHERE clean_seller_id IS NOT NULL AND clean_seller_id != '' AND clean_seller_id NOT LIKE '%[^0-9a-f]%'              AND LEN(clean_seller_id) = 32
+            FROM #normalized_sellers
+            WHERE rn = 1
+              AND clean_seller_id IS NOT NULL AND clean_seller_id != '' AND clean_seller_id NOT LIKE '%[^0-9a-f]%'              AND LEN(clean_seller_id) = 32
               AND clean_seller_zip_code_prefix IS NOT NULL AND clean_seller_zip_code_prefix != ''  AND clean_seller_zip_code_prefix NOT LIKE '%[^0-9]%'   AND LEN(clean_seller_zip_code_prefix) = 5
               AND clean_seller_city IS NOT NULL AND clean_seller_city != ''
               AND clean_seller_state IS NOT NULL AND clean_seller_state != '' AND clean_seller_state NOT LIKE '%[^A-Z]%'             AND LEN(clean_seller_state) = 2
         ) AS src
         ON tgt.seller_id = src.clean_seller_id
+        -- Data changed (according to row_hash) or row is reactivating after a soft delete
         WHEN MATCHED AND (tgt.row_hash <> src.row_hash OR tgt.is_deleted = 1) THEN
             UPDATE SET
                 seller_zip_code_prefix = src.clean_seller_zip_code_prefix,
@@ -142,6 +183,7 @@ BEGIN
                 is_deleted             = 0,
                 deleted_at             = NULL,
                 updated_at             = SYSUTCDATETIME()
+        -- New row in current batch (source) that doesn't exist in cleansed (target)
         WHEN NOT MATCHED BY TARGET THEN
             INSERT (
                 seller_id,             seller_zip_code_prefix,
@@ -153,6 +195,8 @@ BEGIN
                 src.clean_seller_city,           src.clean_seller_state,
                 src.row_hash,                    SYSUTCDATETIME()
             )
+        -- Row exists in cleansed (target) but not in current batch (source) — source no longer contains it
+        -- Soft delete by marking is_deleted = 1 and setting deleted_at for historical tracking, instead of hard deleting.
         WHEN NOT MATCHED BY SOURCE AND tgt.is_deleted = 0 THEN
             UPDATE SET
                 is_deleted = 1,

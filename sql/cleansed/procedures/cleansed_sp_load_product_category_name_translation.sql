@@ -37,18 +37,47 @@ BEGIN
 
         -- 1. Normalize raw data into a temp table so DQ checks and the MERGE
         --    share the same cleaned values without duplicating transformation logic.
+        --    Three-stage CTE:
+        --      'normalized' — computes clean values once from raw.
+        --      'hashed'     — computes row_hash once; reused in both DQ checks and MERGE,
+        --      'ranked'     — applies ROW_NUMBER() for deduplication on product_category_name.
+        --    Duplicate handling distinguishes two types logged separately to dq_log:
+        --      Type A — same product_category_name, identical content (hash match): load artefact,
+        --               deduplicated silently.
+        --      Type B — same product_category_name, conflicting content (hash mismatch): data quality
+        --               conflict, aborts — investigate dq_log before reloading.
+        ;WITH normalized AS (
+            SELECT
+                product_category_name,
+                product_category_name_english,
+                REPLACE(TRIM(product_category_name),         '"', '') AS clean_pt,
+                REPLACE(TRIM(product_category_name_english), '"', '') AS clean_en
+            FROM raw.product_category_name_translation
+            WHERE batch_id = @batch_id
+        ),
+        hashed AS (
+            SELECT
+                *,
+                HASHBYTES('SHA2_256', CONCAT(clean_pt, '|', clean_en)) AS row_hash
+            FROM normalized
+        ),
+        ranked AS (
+            SELECT
+                *,
+                ROW_NUMBER() OVER (
+                    PARTITION BY clean_pt
+                    ORDER BY clean_en
+                ) AS rn
+            FROM hashed
+        )
         SELECT
-            row_id,
-            product_category_name,
-            product_category_name_english,
-            REPLACE(TRIM(product_category_name),         '"', '') AS clean_pt,
-            REPLACE(TRIM(product_category_name_english), '"', '') AS clean_en
+            product_category_name, product_category_name_english,
+            clean_pt, clean_en,
+            row_hash, rn
         INTO #normalized_translations
-        FROM raw.product_category_name_translation
-        WHERE batch_id = @batch_id;
+        FROM ranked;
 
         -- 2. DQ checks: completeness, uniqueness.
-        --    One dq_log row per distinct (column_name, issue) category with affected_row_count.
         WITH dq_checks AS (
 
             -- Completeness: NULL checks
@@ -62,11 +91,29 @@ BEGIN
             UNION ALL
             SELECT 'product_category_name_english', 'Empty string after cleansing' FROM #normalized_translations WHERE clean_en = ''
 
-            -- Uniqueness: one row per duplicate occurrence so outer GROUP BY counts total
+            -- Duplicates Type A: same product_category_name, identical content — load artefact
             UNION ALL
-            SELECT 'product_category_name', 'Duplicate product_category_name in batch'
-            FROM (SELECT COUNT(*) OVER (PARTITION BY product_category_name) AS cnt FROM #normalized_translations) d
-            WHERE cnt > 1
+            SELECT 'product_category_name', 'Duplicate product_category_name: identical content, deduplicated silently'
+            FROM #normalized_translations n
+            WHERE rn > 1
+              AND EXISTS (
+                  SELECT 1 FROM #normalized_translations canon
+                  WHERE canon.clean_pt   = n.clean_pt
+                    AND canon.rn         = 1
+                    AND canon.row_hash   = n.row_hash
+              )
+
+            -- Duplicates Type B: same product_category_name, conflicting content — data quality conflict
+            UNION ALL
+            SELECT 'product_category_name', 'Duplicate product_category_name: conflicting content — investigate before reload'
+            FROM #normalized_translations n
+            WHERE rn > 1
+              AND NOT EXISTS (
+                  SELECT 1 FROM #normalized_translations canon
+                  WHERE canon.clean_pt   = n.clean_pt
+                    AND canon.rn         = 1
+                    AND canon.row_hash   = n.row_hash
+              )
 
         )
 
@@ -75,35 +122,31 @@ BEGIN
         FROM dq_checks
         GROUP BY column_name, issue;
 
-        -- Abort if duplicates were detected.
+        -- Abort on Type B duplicates: conflicting content under the same product_category_name
+        -- cannot be resolved deterministically.
         IF EXISTS (
             SELECT 1 FROM audit.dq_log
             WHERE batch_id    = @batch_id
               AND table_name  = 'product_category_name_translation'
               AND column_name = 'product_category_name'
-              AND issue LIKE 'Duplicate%'
+              AND issue LIKE 'Duplicate product_category_name: conflicting content%'
         )
-            THROW 50004, 'Duplicate product_category_name values detected in batch. Investigate dq_log before reloading.', 1;
+            THROW 50005, 'Conflicting duplicate product_category_name values detected in batch. Investigate dq_log before reloading.', 1;
 
-        -- 3. Incremental upsert + soft delete via MERGE. row_hash detects changed rows
-        --    to avoid unnecessary updates. Rows absent from the current batch are soft-
-        --    deleted (is_deleted = 1) rather than removed. Reappearing rows are reactivated.
+        -- 3. Incremental upsert + soft delete via MERGE. row_hash is pre-computed in the
+        --    temp table and reused here.
+        --    Only rn = 1 rows (canonical per product_category_name) enter the MERGE as source.
         BEGIN TRANSACTION;
-        ;WITH hashed AS (
-            SELECT
-                clean_pt,
-                clean_en,
-                HASHBYTES('SHA2_256', CONCAT(clean_pt, '|', clean_en)) AS row_hash
-            FROM #normalized_translations
-        )
         MERGE cleansed.product_category_name_translation AS tgt
         USING (
             SELECT *
-            FROM hashed
-            WHERE clean_pt IS NOT NULL AND clean_pt != ''
+            FROM #normalized_translations
+            WHERE rn = 1
+              AND clean_pt IS NOT NULL AND clean_pt != ''
               AND clean_en IS NOT NULL AND clean_en != ''
         ) AS src
         ON tgt.product_category_name = src.clean_pt
+        -- Data changed (according to row_hash) or row is reactivating after a soft delete
         WHEN MATCHED AND (tgt.row_hash <> src.row_hash OR tgt.is_deleted = 1) THEN
             UPDATE SET
                 product_category_name_english = src.clean_en,
@@ -111,6 +154,8 @@ BEGIN
                 is_deleted                    = 0,
                 deleted_at                    = NULL,
                 updated_at                    = SYSUTCDATETIME()
+        -- Row exists in cleansed (target) but not in current batch (source) — source no longer contains it
+        -- Soft delete by marking is_deleted = 1 and setting deleted_at for historical tracking, instead of hard deleting.
         WHEN NOT MATCHED BY TARGET THEN
             INSERT (
                 product_category_name, product_category_name_english,
