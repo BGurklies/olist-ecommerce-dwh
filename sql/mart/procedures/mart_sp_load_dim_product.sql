@@ -76,7 +76,7 @@ BEGIN
             ON tgt.product_id = src.product_id
         -- Data changed (according to row_hash) or row is reactivating after a soft delete.
         WHEN MATCHED AND (
-            tgt.row_hash <> src.row_hash OR tgt.row_hash IS NULL OR tgt.is_deleted = 1
+            tgt.row_hash <> src.row_hash OR tgt.is_deleted = 1
         ) THEN
             UPDATE SET
                 product_category_name         = src.product_category_name,
