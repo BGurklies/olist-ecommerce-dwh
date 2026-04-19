@@ -201,7 +201,6 @@ olist-ecommerce-dwh/
 | **SSMS**             | Entwicklung, Testing, lokale Ausführung |
 | **SQL Server Agent** | Job-Scheduling (produktive Ausführung)  |
 | **PowerShell**       | CSV-Vorverarbeitung                     |
-| **Python**           | DDL-Generierung                         |
 | **Git / GitHub**     | Versionierung                           |
 
 ---
