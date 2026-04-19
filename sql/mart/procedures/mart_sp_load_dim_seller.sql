@@ -8,7 +8,10 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    DECLARE @rows        INT       = 0;
+    DECLARE @rows         INT       = 0;
+    DECLARE @rows_inserted INT      = 0;
+    DECLARE @rows_updated  INT      = 0;
+    DECLARE @merge_output  TABLE (action NVARCHAR(10));
     DECLARE @start_time  DATETIME2 = SYSUTCDATETIME();
     DECLARE @duration_ms INT;
     DECLARE @error_msg   NVARCHAR(MAX);
@@ -94,13 +97,19 @@ BEGIN
         WHEN NOT MATCHED BY SOURCE AND tgt.seller_key <> -1 THEN
             UPDATE SET
                 is_deleted  = 1,
-                updated_at = SYSUTCDATETIME();
+                updated_at = SYSUTCDATETIME()
+        OUTPUT $action INTO @merge_output;
 
-        SET @rows        = @@ROWCOUNT;
+        SET @rows_inserted = (SELECT COUNT(*) FROM @merge_output WHERE action = 'INSERT');
+        SET @rows_updated  = (SELECT COUNT(*) FROM @merge_output WHERE action = 'UPDATE');
+        SET @rows          = @rows_inserted + @rows_updated;
         SET @duration_ms = DATEDIFF(MILLISECOND, @start_time, SYSUTCDATETIME());
 
         UPDATE audit.load_log
         SET rows_processed        = @rows,
+            rows_inserted         = @rows_inserted,
+            rows_updated          = @rows_updated,
+            rows_deleted          = 0,
             status                = 'SUCCESS',
             processed_duration_ms = @duration_ms
         WHERE log_id = @log_id;

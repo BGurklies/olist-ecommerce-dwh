@@ -18,7 +18,6 @@ GO
 --
 -- SETUP (required before running):
 --   Update @ScriptRoot below to match the environment.
---   DatasetRoot is derived dynamically from orchestration.pipeline_config.
 -- ============================================================
 
 DECLARE @ScriptRoot  NVARCHAR(500) = 'D:\Code\VCS Projects\olist-ecommerce-dwh\scripts\ps';

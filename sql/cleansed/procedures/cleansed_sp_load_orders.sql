@@ -10,6 +10,9 @@ BEGIN
     SET NOCOUNT ON;
 
     DECLARE @merge_rowcount INT           = 0;
+    DECLARE @rows_inserted  INT           = 0;
+    DECLARE @rows_updated   INT           = 0;
+    DECLARE @merge_output   TABLE (action NVARCHAR(10));
     DECLARE @start_time     DATETIME2(3)  = SYSUTCDATETIME();
     DECLARE @duration_ms    INT;
     DECLARE @error_msg      NVARCHAR(MAX);
@@ -23,6 +26,9 @@ BEGIN
         ON src.pipeline_id      = cleansed_cfg.source_pipeline_id
     WHERE cleansed_cfg.pipeline_id = @pipeline_id
       AND src.last_run_status      = 'SUCCESS';
+
+    IF @batch_id IS NULL
+        THROW 50010, 'Source pipeline has no successful RAW load — batch_id could not be resolved.', 1;
 
     BEGIN TRY
         INSERT INTO audit.load_log (
@@ -252,13 +258,19 @@ BEGIN
             UPDATE SET
                 is_deleted = 1,
                 deleted_at = SYSUTCDATETIME(),
-                updated_at = SYSUTCDATETIME();
+                updated_at = SYSUTCDATETIME()
+        OUTPUT $action INTO @merge_output;
 
-        SET @merge_rowcount = @@ROWCOUNT;
+        SET @rows_inserted  = (SELECT COUNT(*) FROM @merge_output WHERE action = 'INSERT');
+        SET @rows_updated   = (SELECT COUNT(*) FROM @merge_output WHERE action = 'UPDATE');
+        SET @merge_rowcount = @rows_inserted + @rows_updated;
         SET @duration_ms    = DATEDIFF(MILLISECOND, @start_time, SYSUTCDATETIME());
 
         UPDATE audit.load_log
         SET rows_processed        = @merge_rowcount,
+            rows_inserted         = @rows_inserted,
+            rows_updated          = @rows_updated,
+            rows_deleted          = 0,
             status                = 'SUCCESS',
             processed_duration_ms = @duration_ms
         WHERE batch_id = @batch_id AND sp_name = 'cleansed.sp_load_orders';

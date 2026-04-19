@@ -35,6 +35,9 @@ CREATE TABLE audit.load_log (
     sp_name               NVARCHAR(255)      NOT NULL,
     table_name            NVARCHAR(100)      NOT NULL,
     rows_processed        INT                NOT NULL,
+    rows_inserted         INT                NULL,
+    rows_updated          INT                NULL,
+    rows_deleted          INT                NULL,
     status                NVARCHAR(20)       NOT NULL
                               CONSTRAINT chk_load_log_status
                               CHECK (status IN ('RUNNING', 'SUCCESS', 'FAILED')),

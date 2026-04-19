@@ -80,6 +80,9 @@ BEGIN
 
         UPDATE audit.load_log
         SET rows_processed        = @rows,
+            rows_inserted         = @rows,
+            rows_updated          = 0,
+            rows_deleted          = 0,
             status                = 'SUCCESS',
             processed_duration_ms = @duration_ms
         WHERE log_id = @log_id;
