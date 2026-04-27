@@ -8,7 +8,7 @@ Ziel des Projekts ist der Aufbau eines produktionsnahen Data Warehouse in SQL Se
 
 ## Architektur
 
-<img width="1472" height="1308" alt="image" src="https://github.com/user-attachments/assets/363b4a7d-fc2c-4263-92c4-87ac6c829ad0" />
+<img alt="DWH Architecture" src="docs/images/dwh_architecture_olist.svg" />
 
 ### Querschnittsschemas
 
