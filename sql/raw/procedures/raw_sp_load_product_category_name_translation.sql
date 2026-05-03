@@ -70,7 +70,7 @@ BEGIN
             FROM ''' + REPLACE(@file_path, '''', '''''') + '''
             WITH (
                 FIRSTROW        = 2,
-                FIELDTERMINATOR = '','',
+                FIELDTERMINATOR = ''|'',
                 ROWTERMINATOR   = ''0x0a'',
                 CODEPAGE        = ''65001''
             );';
