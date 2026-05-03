@@ -5,7 +5,7 @@ CREATE OR ALTER PROCEDURE mart.sp_load_dim_date
     @pipeline_id INT              = NULL,
     @job_run_id  UNIQUEIDENTIFIER = NULL,
     @start_date  DATE             = '2016-01-01',
-    @end_date    DATE             = '2025-12-31'   -- extend as needed
+    @end_date    DATE             = '2018-12-31'
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -35,8 +35,8 @@ BEGIN
         -- Used when a date FK cannot be resolved (should not occur with valid data).
         IF NOT EXISTS (SELECT 1 FROM mart.dim_date WHERE date_key = 0)
         BEGIN
-            INSERT INTO mart.dim_date (date_key, full_date, year, iso_year, quarter, month, month_name, week_of_year, day_of_month, day_of_week, day_name, is_weekend)
-            VALUES (0, '1900-01-01', 1900, 1900, 1, 1, 'Unknown', 1, 1, 0, 'Unknown', 0);
+            INSERT INTO mart.dim_date (date_key, full_date, year, iso_year, quarter, month, month_name, year_month_key, year_month, month_year_short, week_of_year, day_of_month, day_of_week, day_name, is_weekend)
+            VALUES (0, '1900-01-01', 1900, 1900, 1, 1, 'Unknown', 0, 'Unknown', 'Unknown', 1, 1, 0, 'Unknown', 0);
         END
 
         -- Tally CTE generates sequential integers 0..9999 (≈27 years of daily rows).
@@ -62,6 +62,9 @@ BEGIN
             quarter,
             month,
             month_name,
+            year_month_key,
+            year_month,
+            month_year_short,
             week_of_year,
             day_of_month,
             day_of_week,
@@ -83,14 +86,28 @@ BEGIN
             CAST(MONTH(d) AS TINYINT)                    AS month,
             CAST(
                 CASE MONTH(d)
-                    WHEN  1 THEN 'January'   WHEN  2 THEN 'February'
-                    WHEN  3 THEN 'March'     WHEN  4 THEN 'April'
-                    WHEN  5 THEN 'May'       WHEN  6 THEN 'June'
-                    WHEN  7 THEN 'July'      WHEN  8 THEN 'August'
-                    WHEN  9 THEN 'September' WHEN 10 THEN 'October'
-                    WHEN 11 THEN 'November'  WHEN 12 THEN 'December'
+                    WHEN  1 THEN 'Jan' WHEN  2 THEN 'Feb'
+                    WHEN  3 THEN 'Mar' WHEN  4 THEN 'Apr'
+                    WHEN  5 THEN 'May' WHEN  6 THEN 'Jun'
+                    WHEN  7 THEN 'Jul' WHEN  8 THEN 'Aug'
+                    WHEN  9 THEN 'Sep' WHEN 10 THEN 'Oct'
+                    WHEN 11 THEN 'Nov' WHEN 12 THEN 'Dec'
                 END
             AS NVARCHAR(9))                              AS month_name,
+            CAST(YEAR(d) * 100 + MONTH(d) AS INT)        AS year_month_key,
+            CAST(YEAR(d) AS CHAR(4)) + '-'
+                + RIGHT('0' + CAST(MONTH(d) AS VARCHAR(2)), 2)
+                                                         AS year_month,
+            CAST(
+                CASE MONTH(d)
+                    WHEN  1 THEN 'Jan' WHEN  2 THEN 'Feb'
+                    WHEN  3 THEN 'Mar' WHEN  4 THEN 'Apr'
+                    WHEN  5 THEN 'May' WHEN  6 THEN 'Jun'
+                    WHEN  7 THEN 'Jul' WHEN  8 THEN 'Aug'
+                    WHEN  9 THEN 'Sep' WHEN 10 THEN 'Oct'
+                    WHEN 11 THEN 'Nov' WHEN 12 THEN 'Dec'
+                END + ' ' + CAST(YEAR(d) AS CHAR(4))
+            AS NVARCHAR(8))                              AS month_year_short,
             CAST(DATEPART(ISO_WEEK, d) AS TINYINT)       AS week_of_year,
             CAST(DAY(d) AS TINYINT)                      AS day_of_month,
             CAST(DATEPART(WEEKDAY, d) AS TINYINT)        AS day_of_week,

@@ -37,8 +37,8 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM mart.dim_seller WHERE seller_key = -1)
         BEGIN
             SET IDENTITY_INSERT mart.dim_seller ON;
-            INSERT INTO mart.dim_seller (seller_key, seller_id, seller_zip_code, seller_city, seller_state, seller_lat, seller_lng)
-            VALUES (-1, 'UNKNOWN', '00000', 'Unknown', 'XX', NULL, NULL);
+            INSERT INTO mart.dim_seller (seller_key, seller_id, seller_zip_code, seller_city, seller_state, seller_state_name, seller_lat, seller_lng)
+            VALUES (-1, 'UNKNOWN', '00000', 'Unknown', 'XX', 'Unknown', NULL, NULL);
             SET IDENTITY_INSERT mart.dim_seller OFF;
         END
 
@@ -49,6 +49,23 @@ BEGIN
                 s.seller_zip_code_prefix  AS seller_zip_code,
                 s.seller_city,
                 s.seller_state,
+                CASE s.seller_state
+                    WHEN 'AC' THEN 'Acre'               WHEN 'AL' THEN 'Alagoas'
+                    WHEN 'AM' THEN 'Amazonas'           WHEN 'AP' THEN 'Amapá'
+                    WHEN 'BA' THEN 'Bahia'              WHEN 'CE' THEN 'Ceará'
+                    WHEN 'DF' THEN 'Distrito Federal'   WHEN 'ES' THEN 'Espírito Santo'
+                    WHEN 'GO' THEN 'Goiás'              WHEN 'MA' THEN 'Maranhão'
+                    WHEN 'MG' THEN 'Minas Gerais'       WHEN 'MS' THEN 'Mato Grosso do Sul'
+                    WHEN 'MT' THEN 'Mato Grosso'        WHEN 'PA' THEN 'Pará'
+                    WHEN 'PB' THEN 'Paraíba'            WHEN 'PE' THEN 'Pernambuco'
+                    WHEN 'PI' THEN 'Piauí'              WHEN 'PR' THEN 'Paraná'
+                    WHEN 'RJ' THEN 'Rio de Janeiro'     WHEN 'RN' THEN 'Rio Grande do Norte'
+                    WHEN 'RO' THEN 'Rondônia'           WHEN 'RR' THEN 'Roraima'
+                    WHEN 'RS' THEN 'Rio Grande do Sul'  WHEN 'SC' THEN 'Santa Catarina'
+                    WHEN 'SE' THEN 'Sergipe'            WHEN 'SP' THEN 'São Paulo'
+                    WHEN 'TO' THEN 'Tocantins'
+                    ELSE s.seller_state
+                END                                     AS seller_state_name,
                 g.geolocation_lat         AS seller_lat,
                 g.geolocation_lng         AS seller_lng,
                 HASHBYTES('SHA2_256', CONCAT(
@@ -74,24 +91,25 @@ BEGIN
             UPDATE SET
                 seller_zip_code = src.seller_zip_code,
                 seller_city     = src.seller_city,
-                seller_state    = src.seller_state,
-                seller_lat      = src.seller_lat,
+                seller_state      = src.seller_state,
+                seller_state_name = src.seller_state_name,
+                seller_lat        = src.seller_lat,
                 seller_lng      = src.seller_lng,
                 is_deleted       = 0,
                 row_hash         = src.row_hash,
                 updated_at      = SYSUTCDATETIME()
         WHEN NOT MATCHED BY TARGET THEN
             INSERT (
-                seller_id,      seller_zip_code,
-                seller_city,    seller_state,
-                seller_lat,     seller_lng,
-                row_hash
+                seller_id,          seller_zip_code,
+                seller_city,        seller_state,
+                seller_state_name,  seller_lat,
+                seller_lng,         row_hash
             )
             VALUES (
-                src.seller_id,      src.seller_zip_code,
-                src.seller_city,    src.seller_state,
-                src.seller_lat,     src.seller_lng,
-                src.row_hash
+                src.seller_id,          src.seller_zip_code,
+                src.seller_city,        src.seller_state,
+                src.seller_state_name,  src.seller_lat,
+                src.seller_lng,         src.row_hash
             )
         -- The unknown member row (seller_key = -1) is excluded from soft deletion.
         WHEN NOT MATCHED BY SOURCE AND tgt.seller_key <> -1 THEN

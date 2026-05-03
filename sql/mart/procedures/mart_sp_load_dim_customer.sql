@@ -37,8 +37,8 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM mart.dim_customer WHERE customer_key = -1)
         BEGIN
             SET IDENTITY_INSERT mart.dim_customer ON;
-            INSERT INTO mart.dim_customer (customer_key, customer_id, customer_unique_id, customer_zip_code, customer_city, customer_state, customer_lat, customer_lng)
-            VALUES (-1, 'UNKNOWN', 'UNKNOWN', '00000', 'Unknown', 'XX', NULL, NULL);
+            INSERT INTO mart.dim_customer (customer_key, customer_id, customer_unique_id, customer_zip_code, customer_city, customer_state, customer_state_name, customer_lat, customer_lng)
+            VALUES (-1, 'UNKNOWN', 'UNKNOWN', '00000', 'Unknown', 'XX', 'Unknown', NULL, NULL);
             SET IDENTITY_INSERT mart.dim_customer OFF;
         END
 
@@ -50,6 +50,23 @@ BEGIN
                 c.customer_zip_code_prefix  AS customer_zip_code,
                 c.customer_city,
                 c.customer_state,
+                CASE c.customer_state
+                    WHEN 'AC' THEN 'Acre'               WHEN 'AL' THEN 'Alagoas'
+                    WHEN 'AM' THEN 'Amazonas'           WHEN 'AP' THEN 'Amapá'
+                    WHEN 'BA' THEN 'Bahia'              WHEN 'CE' THEN 'Ceará'
+                    WHEN 'DF' THEN 'Distrito Federal'   WHEN 'ES' THEN 'Espírito Santo'
+                    WHEN 'GO' THEN 'Goiás'              WHEN 'MA' THEN 'Maranhão'
+                    WHEN 'MG' THEN 'Minas Gerais'       WHEN 'MS' THEN 'Mato Grosso do Sul'
+                    WHEN 'MT' THEN 'Mato Grosso'        WHEN 'PA' THEN 'Pará'
+                    WHEN 'PB' THEN 'Paraíba'            WHEN 'PE' THEN 'Pernambuco'
+                    WHEN 'PI' THEN 'Piauí'              WHEN 'PR' THEN 'Paraná'
+                    WHEN 'RJ' THEN 'Rio de Janeiro'     WHEN 'RN' THEN 'Rio Grande do Norte'
+                    WHEN 'RO' THEN 'Rondônia'           WHEN 'RR' THEN 'Roraima'
+                    WHEN 'RS' THEN 'Rio Grande do Sul'  WHEN 'SC' THEN 'Santa Catarina'
+                    WHEN 'SE' THEN 'Sergipe'            WHEN 'SP' THEN 'São Paulo'
+                    WHEN 'TO' THEN 'Tocantins'
+                    ELSE c.customer_state
+                END                                     AS customer_state_name,
                 g.geolocation_lat           AS customer_lat,
                 g.geolocation_lng           AS customer_lng,
                 HASHBYTES('SHA2_256', CONCAT(
@@ -77,8 +94,9 @@ BEGIN
                 customer_unique_id = src.customer_unique_id,
                 customer_zip_code  = src.customer_zip_code,
                 customer_city      = src.customer_city,
-                customer_state     = src.customer_state,
-                customer_lat       = src.customer_lat,
+                customer_state      = src.customer_state,
+                customer_state_name = src.customer_state_name,
+                customer_lat        = src.customer_lat,
                 customer_lng       = src.customer_lng,
                 is_deleted         = 0,
                 row_hash           = src.row_hash,
@@ -87,13 +105,15 @@ BEGIN
             INSERT (
                 customer_id,        customer_unique_id,
                 customer_zip_code,  customer_city,
-                customer_state,     customer_lat,  customer_lng,
+                customer_state,     customer_state_name,
+                customer_lat,       customer_lng,
                 row_hash
             )
             VALUES (
                 src.customer_id,        src.customer_unique_id,
                 src.customer_zip_code,  src.customer_city,
-                src.customer_state,     src.customer_lat,  src.customer_lng,
+                src.customer_state,     src.customer_state_name,
+                src.customer_lat,       src.customer_lng,
                 src.row_hash
             )
         -- The unknown member row (customer_key = -1) is excluded from soft deletion.

@@ -6,7 +6,7 @@ GO
 -- FK constraints are omitted on fact tables: they block TRUNCATE and add write overhead.
 -- Referential integrity is enforced by ETL (unknown member -1 / 0 as fallback).
 
--- Populated once by mart.sp_load_dim_date. Covers 2016–2025 by default.
+-- Populated once by mart.sp_load_dim_date. Covers 2016–2018 (Olist dataset range).
 -- Unknown/missing date: date_key = 0 (sentinel row).
 CREATE TABLE mart.dim_date (
     date_key        INT           NOT NULL,  -- YYYYMMDD surrogate (e.g. 20181123)
@@ -16,6 +16,9 @@ CREATE TABLE mart.dim_date (
     quarter         TINYINT       NOT NULL,  -- 1–4
     month           TINYINT       NOT NULL,  -- 1–12
     month_name      NVARCHAR(9)   NOT NULL,  -- 'January' … 'December'
+    year_month_key  INT           NOT NULL,  -- YYYYMM surrogate (e.g. 201811) — sort key for month_name
+    year_month      NVARCHAR(7)   NOT NULL,  -- 'YYYY-MM' (e.g. '2018-11') — native chronological sort
+    month_year_short NVARCHAR(8)  NOT NULL,  -- 'Nov 2018' — readable axis label
     week_of_year    TINYINT       NOT NULL,  -- ISO week number
     day_of_month    TINYINT       NOT NULL,  -- 1–31
     day_of_week     TINYINT       NOT NULL,  -- 1=Sun, 7=Sat
@@ -35,6 +38,7 @@ CREATE TABLE mart.dim_customer (
     customer_zip_code        CHAR(5)           NOT NULL,
     customer_city            NVARCHAR(100)     NOT NULL,
     customer_state           CHAR(2)           NOT NULL,
+    customer_state_name      NVARCHAR(50)      NOT NULL,
     customer_lat             DECIMAL(10,7)     NULL,  -- NULL when zip not in geolocation
     customer_lng             DECIMAL(10,7)     NULL,
     is_deleted               BIT               NOT NULL DEFAULT 0,
@@ -54,6 +58,7 @@ CREATE TABLE mart.dim_seller (
     seller_zip_code          CHAR(5)           NOT NULL,
     seller_city              NVARCHAR(100)     NOT NULL,
     seller_state             CHAR(2)           NOT NULL,
+    seller_state_name        NVARCHAR(50)      NOT NULL,
     seller_lat               DECIMAL(10,7)     NULL,  -- NULL when zip not in geolocation
     seller_lng               DECIMAL(10,7)     NULL,
     is_deleted               BIT               NOT NULL DEFAULT 0,
