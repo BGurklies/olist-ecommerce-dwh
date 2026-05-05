@@ -131,7 +131,7 @@ erDiagram
 
 ---
 
-## Dashboard
+## Power BI Dashboard
 
 ### Page 1 — Executive Overview
 
