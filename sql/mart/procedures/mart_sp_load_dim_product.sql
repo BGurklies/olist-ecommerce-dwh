@@ -40,7 +40,7 @@ BEGIN
             INSERT INTO mart.dim_product (product_key, product_id, product_category_name, product_category_name_english,
                 product_name_length, product_description_length, product_photos_qty,
                 product_weight_g, product_length_cm, product_height_cm, product_width_cm)
-            VALUES (-1, 'UNKNOWN', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+            VALUES (-1, 'UNKNOWN', 'UNKNOWN', 'UNKNOWN', NULL, NULL, NULL, NULL, NULL, NULL, NULL);
             SET IDENTITY_INSERT mart.dim_product OFF;
         END
 
@@ -48,8 +48,8 @@ BEGIN
         ;WITH src AS (
             SELECT
                 p.product_id,
-                p.product_category_name,
-                CASE t.product_category_name_english
+                ISNULL(p.product_category_name, 'UNKNOWN') AS product_category_name,
+                CASE COALESCE(t.product_category_name_english, p.product_category_name)
                     WHEN 'agro_industry_and_commerce'          THEN 'Agro Industry & Commerce'
                     WHEN 'air_conditioning'                    THEN 'Air Conditioning'
                     WHEN 'art'                                 THEN 'Art'
@@ -68,22 +68,22 @@ BEGIN
                     WHEN 'computers_accessories'               THEN 'Computers & Accessories'
                     WHEN 'consoles_games'                      THEN 'Consoles & Games'
                     WHEN 'construction_tools_construction'     THEN 'Construction Tools'
-                    WHEN 'construction_tools_lights'           THEN 'Construction Tools - Lights'
-                    WHEN 'construction_tools_safety'           THEN 'Construction Tools - Safety'
+                    WHEN 'construction_tools_lights'           THEN 'Construction: Lights'
+                    WHEN 'construction_tools_safety'           THEN 'Construction: Safety'
                     WHEN 'cool_stuff'                          THEN 'Cool Stuff'
-                    WHEN 'costruction_tools_garden'            THEN 'Construction Tools - Garden'
-                    WHEN 'costruction_tools_tools'             THEN 'Construction Tools - General'
+                    WHEN 'costruction_tools_garden'            THEN 'Construction: Garden'
+                    WHEN 'costruction_tools_tools'             THEN 'Construction: General'
                     WHEN 'diapers_and_hygiene'                 THEN 'Diapers & Hygiene'
                     WHEN 'drinks'                              THEN 'Drinks'
                     WHEN 'dvds_blu_ray'                        THEN 'DVDs & Blu-Ray'
                     WHEN 'electronics'                         THEN 'Electronics'
                     WHEN 'fashio_female_clothing'              THEN 'Fashion: Female Clothing'
-                    WHEN 'fashion_bags_accessories'            THEN 'Fashion: Bags & Accessories'
-                    WHEN 'fashion_childrens_clothes'           THEN 'Fashion: Children''s Clothes'
+                    WHEN 'fashion_bags_accessories'            THEN 'Fashion: Bags'
+                    WHEN 'fashion_childrens_clothes'           THEN 'Fashion: Children'
                     WHEN 'fashion_male_clothing'               THEN 'Fashion: Male Clothing'
                     WHEN 'fashion_shoes'                       THEN 'Fashion: Shoes'
                     WHEN 'fashion_sport'                       THEN 'Fashion: Sport'
-                    WHEN 'fashion_underwear_beach'             THEN 'Fashion: Underwear & Beachwear'
+                    WHEN 'fashion_underwear_beach'             THEN 'Fashion: Underwear'
                     WHEN 'fixed_telephony'                     THEN 'Fixed Telephony'
                     WHEN 'flowers'                             THEN 'Flowers'
                     WHEN 'food'                                THEN 'Food'
@@ -91,7 +91,7 @@ BEGIN
                     WHEN 'furniture_bedroom'                   THEN 'Furniture: Bedroom'
                     WHEN 'furniture_decor'                     THEN 'Furniture & Decor'
                     WHEN 'furniture_living_room'               THEN 'Furniture: Living Room'
-                    WHEN 'furniture_mattress_and_upholstery'   THEN 'Furniture: Mattress & Upholstery'
+                    WHEN 'furniture_mattress_and_upholstery'   THEN 'Furniture: Mattress'
                     WHEN 'garden_tools'                        THEN 'Garden Tools'
                     WHEN 'health_beauty'                       THEN 'Health & Beauty'
                     WHEN 'home_appliances'                     THEN 'Home Appliances'
@@ -100,8 +100,8 @@ BEGIN
                     WHEN 'home_confort'                        THEN 'Home Comfort'
                     WHEN 'home_construction'                   THEN 'Home Construction'
                     WHEN 'housewares'                          THEN 'Housewares'
-                    WHEN 'industry_commerce_and_business'      THEN 'Industry, Commerce & Business'
-                    WHEN 'kitchen_dining_laundry_garden_furniture' THEN 'Furniture: Kitchen, Dining & Garden'
+                    WHEN 'industry_commerce_and_business'      THEN 'Industry & Commerce'
+                    WHEN 'kitchen_dining_laundry_garden_furniture' THEN 'Furniture: Kitchen & Dining'
                     WHEN 'la_cuisine'                          THEN 'La Cuisine'
                     WHEN 'luggage_accessories'                 THEN 'Luggage & Accessories'
                     WHEN 'market_place'                        THEN 'Marketplace'
@@ -109,19 +109,23 @@ BEGIN
                     WHEN 'musical_instruments'                 THEN 'Musical Instruments'
                     WHEN 'office_furniture'                    THEN 'Office Furniture'
                     WHEN 'party_supplies'                      THEN 'Party Supplies'
+                    WHEN 'pc_gaming'                           THEN 'PC Gaming'
+                    WHEN 'pc_gamer'                            THEN 'PC Gaming'
+                    WHEN 'portable_kitchen_and_food_processors' THEN 'Portable Kitchen'
+                    WHEN 'portateis_cozinha_e_preparadores_de_alimentos' THEN 'Portable Kitchen'
                     WHEN 'perfumery'                           THEN 'Perfumery'
                     WHEN 'pet_shop'                            THEN 'Pet Shop'
                     WHEN 'security_and_services'               THEN 'Security & Services'
                     WHEN 'signaling_and_security'              THEN 'Signaling & Security'
                     WHEN 'small_appliances'                    THEN 'Small Appliances'
-                    WHEN 'small_appliances_home_oven_and_coffee' THEN 'Small Appliances: Oven & Coffee'
+                    WHEN 'small_appliances_home_oven_and_coffee' THEN 'Small Appliances: Oven'
                     WHEN 'sports_leisure'                      THEN 'Sports & Leisure'
                     WHEN 'stationery'                          THEN 'Stationery'
-                    WHEN 'tablets_printing_image'              THEN 'Tablets, Printing & Imaging'
+                    WHEN 'tablets_printing_image'              THEN 'Tablets & Printing'
                     WHEN 'telephony'                           THEN 'Telephony'
                     WHEN 'toys'                                THEN 'Toys'
                     WHEN 'watches_gifts'                       THEN 'Watches & Gifts'
-                    ELSE t.product_category_name_english
+                    ELSE COALESCE(t.product_category_name_english, p.product_category_name, 'UNKNOWN')
                 END                              AS product_category_name_english,
                 p.product_name_lenght        AS product_name_length,
                 p.product_description_lenght AS product_description_length,
@@ -131,8 +135,8 @@ BEGIN
                 p.product_height_cm,
                 p.product_width_cm,
                 HASHBYTES('SHA2_256', CONCAT(
-                    ISNULL(p.product_category_name,         ''), '|',
-                    ISNULL(t.product_category_name_english, ''), '|',
+                    ISNULL(p.product_category_name,                                        'UNKNOWN'), '|',
+                    ISNULL(COALESCE(t.product_category_name_english, p.product_category_name, 'UNKNOWN'), 'UNKNOWN'), '|',
                     ISNULL(CAST(p.product_name_lenght        AS NVARCHAR(10)), ''), '|',
                     ISNULL(CAST(p.product_description_lenght AS NVARCHAR(10)), ''), '|',
                     ISNULL(CAST(p.product_photos_qty         AS NVARCHAR(10)), ''), '|',
