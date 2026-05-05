@@ -36,7 +36,7 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM mart.dim_date WHERE date_key = 0)
         BEGIN
             INSERT INTO mart.dim_date (date_key, full_date, year, iso_year, quarter, month, month_name, year_month_key, year_month, month_year_short, week_of_year, day_of_month, day_of_week, day_name, is_weekend)
-            VALUES (0, '1900-01-01', 1900, 1900, 1, 1, 'Unknown', 0, 'Unknown', 'Unknown', 1, 1, 0, 'Unknown', 0);
+            VALUES (0, '1900-01-01', 1900, 1900, 1, 1, 'UNKNOWN', 0, 'UNKNOWN', 'UNKNOWN', 1, 1, 0, 'UNKNOWN', 0);
         END
 
         -- Tally CTE generates sequential integers 0..9999 (≈27 years of daily rows).

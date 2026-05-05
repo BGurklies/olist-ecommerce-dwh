@@ -36,7 +36,7 @@ BEGIN
         INSERT INTO mart.dim_payment_type (payment_type_key, payment_type_name)
         SELECT v.payment_type_key, v.payment_type_name
         FROM (VALUES
-            (-1, 'Unknown'),
+            (-1, 'UNKNOWN'),
             ( 1, 'credit_card'),
             ( 2, 'boleto'),
             ( 3, 'voucher'),

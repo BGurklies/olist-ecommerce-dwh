@@ -7,9 +7,9 @@ GO
 -- Applied: manually in SSMS
 
 ALTER TABLE mart.dim_customer
-    ADD customer_state_name NVARCHAR(50) NOT NULL DEFAULT 'Unknown';
+    ADD customer_state_name NVARCHAR(50) NOT NULL DEFAULT 'UNKNOWN';
 GO
 
 ALTER TABLE mart.dim_seller
-    ADD seller_state_name NVARCHAR(50) NOT NULL DEFAULT 'Unknown';
+    ADD seller_state_name NVARCHAR(50) NOT NULL DEFAULT 'UNKNOWN';
 GO

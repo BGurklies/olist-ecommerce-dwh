@@ -38,7 +38,7 @@ BEGIN
         BEGIN
             SET IDENTITY_INSERT mart.dim_seller ON;
             INSERT INTO mart.dim_seller (seller_key, seller_id, seller_zip_code, seller_city, seller_state, seller_state_name, seller_lat, seller_lng)
-            VALUES (-1, 'UNKNOWN', '00000', 'Unknown', 'XX', 'Unknown', NULL, NULL);
+            VALUES (-1, 'UNKNOWN', '00000', 'UNKNOWN', 'XX', 'UNKNOWN', NULL, NULL);
             SET IDENTITY_INSERT mart.dim_seller OFF;
         END
 

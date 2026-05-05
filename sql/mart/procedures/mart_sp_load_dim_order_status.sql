@@ -38,7 +38,7 @@ BEGIN
         INSERT INTO mart.dim_order_status (order_status_key, status_name, status_category, sort_order)
         SELECT v.order_status_key, v.status_name, v.status_category, v.sort_order
         FROM (VALUES
-            (-1, 'Unknown',     'unknown',     0),
+            (-1, 'UNKNOWN',     'UNKNOWN',     0), 
             ( 1, 'created',     'in_progress', 1),
             ( 2, 'approved',    'in_progress', 2),
             ( 3, 'invoiced',    'in_progress', 3),
