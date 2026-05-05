@@ -137,6 +137,10 @@ erDiagram
 
 ![Executive Overview](docs/images/dashboard/page1_executive_overview.png)
 
+### Page 2 — Sales & Product
+
+![Sales & Product](docs/images/dashboard/page2_sales_and_product.png)
+
 DAX Measures: [`powerbi/te_create_measures.csx`](powerbi/te_create_measures.csx)
 
 ---
@@ -329,7 +333,8 @@ olist-ecommerce-dwh/
 | CLEANSED-Layer: alle 9 Entitäten                         | Abgeschlossen  |
 | MART-Layer: 6 Dimensionen, 2 Faktentabellen              | Abgeschlossen  |
 | Power BI Reporting — Seite 1 (Executive Overview)        | Abgeschlossen  |
-| Power BI Reporting — Seiten 2–6                          | In Entwicklung |
+| Power BI Reporting — Seite 2 (Sales & Product)           | Abgeschlossen  |
+| Power BI Reporting — Seiten 3–4                          | In Entwicklung |
 
 ---
 
