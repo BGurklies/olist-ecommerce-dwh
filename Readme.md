@@ -326,11 +326,11 @@ olist-ecommerce-dwh/
 
 | Tool                 | Verwendung                              |
 | -------------------- | --------------------------------------- |
-| **MS SQL Server**    | Datenbank, gesamte Pipeline-Logik                        |
-| **SSMS**             | Entwicklung, Testing, lokale Ausführung                  |
+| **MS SQL Server**    | Data Warehouse, gesamte Pipeline-Logik                        |
+| **SSMS**             | DDL-Deploy, SP-Entwicklung, Testing, lokale Ausführung |
 | **SQL Server Agent** | Job-Scheduling (produktive Ausführung)                   |
 | **PowerShell**       | CSV-Vorverarbeitung                                      |
-| **Power BI Desktop** | Reporting, DAX Measures, Datenmodellierung|
+| **Power BI Desktop** | Semantic Model, DAX Measures, Dashboard|
 | **Tabular Editor 2** | Bulk-Erstellung von DAX Measures via C# Script           |
 | **Git / GitHub**     | Versionierung                                            |
 
@@ -342,8 +342,8 @@ olist-ecommerce-dwh/
 | -------------------------------------------------------- |
 | Schemas & Audit-Tabellen                                 |
 | Orchestrierung (pipeline_config, Agent Job)              |
-| RAW-Layer: Stored Procedures und EDAs (alle 9 Entitäten) |
-| CLEANSED-Layer: alle 9 Entitäten                         |
+| RAW-Layer: Tabellen, Stored Procedures und EDAs (je 9 Entitäten) |
+| CLEANSED-Layer: Tabellen und Stored Procedures (je 9 Entitäten)                        |
 | MART-Layer: 6 Dimensionen, 2 Faktentabellen              |
 | Power BI Reporting: Seite 1 (Executive Overview)         |
 | Power BI Reporting: Seite 2 (Sales & Product)            |
@@ -354,4 +354,4 @@ olist-ecommerce-dwh/
 
 ## Setup
 
-Siehe [SETUP.md](SETUP.md) für Schritt-für-Schritt-Anleitung zur lokalen Reproduzierbarkeit.
+Siehe [SETUP.md](SETUP.md) für die Schritt-für-Schritt-Anleitung zur lokalen Reproduzierbarkeit.
