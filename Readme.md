@@ -12,14 +12,32 @@ Ziel des Projekts ist der Aufbau einer produktionsnahen Analytics Platform auf B
 
 <img alt="DWH Architecture" src="docs/images/architecture/dwh_architecture.svg" />
 
-### Querschnittsschemas
+Die Architektur folgt einem dreischichtigen ELT-Ansatz: `raw`, `cleansed` und `mart`. Der `raw`-Layer nimmt die Quelldaten unverändert als append-only Abbild auf. Der `cleansed`-Layer bereinigt, validiert und erkennt Änderungen inkrementell per SHA2-256 Row-Hash. Der `mart`-Layer baut daraus ein Kimball Star Schema auf, das direkt als Datenquelle für das Power BI Dashboard dient. Querschnittsschemas (`audit`, `orchestration`) stellen Rückverfolgbarkeit und Metadata-Driven Steuerung aller Pipelines sicher.
 
-| Schema          | Inhalt                                                                                                                   |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `audit`         | `load_log`, `error_log`, `dq_log`, `job_log`: vollständiger Audit-Trail jedes Ladevorgangs                              |
-| `orchestration` | `pipeline_config` (Metadata Framework), `sp_run_layer`, `sp_run_full_load`, `agent_job_full_load` (SQL Server Agent Job) |
+---
 
-### Mart: Star-Schema (ERD)
+## Datenbasis
+
+**Quelle:** [Olist Brazilian E-Commerce](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
+
+| Datei                                   | Inhalt                             |
+| --------------------------------------- | ----------------------------------- |
+| `olist_customers_dataset.csv`           | Kundenstammdaten                   |
+| `olist_orders_dataset.csv`              | Bestellkopfdaten                   |
+| `olist_order_items_dataset.csv`         | Bestellpositionen                  |
+| `olist_order_payments_dataset.csv`      | Zahlungsinformationen              |
+| `olist_order_reviews_dataset.csv`       | Kundenbewertungen                  |
+| `olist_products_dataset.csv`            | Produktstammdaten                  |
+| `olist_sellers_dataset.csv`             | Verkäuferstammdaten                |
+| `olist_geolocation_dataset.csv`         | PLZ-Geodaten                       |
+| `product_category_name_translation.csv` | Kategorie-Übersetzungen (PT → EN)  |
+
+---
+
+## Data Mart: Star-Schema
+
+Der Mart-Layer bildet das auswertungsbereite Datenmodell: ein Kimball Star Schema mit 6 Dimensionen und 2 Faktentabellen, das direkt als Datenquelle für das Power BI Dashboard dient.
+
 
 ```mermaid
 erDiagram
@@ -131,37 +149,27 @@ erDiagram
     dim_payment_type ||--o{ fact_payments  : "payment_type_key"
 ```
 
----
+`fact_sales` speichert jede Bestellposition auf Ebene Datum, Kunde, Verkäufer, Produkt und Bestellstatus, mit Preis, Frachtkosten und Lieferzeitkennzahlen als zentrale Measures. `fact_payments` erfasst jede Zahltransaktion auf Ebene Datum, Kunde und Zahlungsart, mit Zahlungsbetrag und Ratenanzahl. Alle sechs Dimensionen kurz erläutert:
 
-## Power BI Dashboard
-
-Das 4-seitige Dashboard deckt die zentralen analytischen Domänen der Plattform ab: Gesamtkennzahlen, Produkt- und Vertriebsanalyse, Lieferperformance sowie Kunden- und Zahlungsverhalten. Jede Seite enthält KPI-Cards mit MoM-Delta, themenspezifische Trendanalysen und einen gemeinsamen Filterbereich (Jahr, Monat, Bundesstaat, Produktkategorie).
-
-> **Hinweis:** Der Report ist auf den Zeitraum Januar 2017 – August 2018 eingeschränkt. Sep–Dez 2016 (Ramp-up, sehr geringes Volumen) und Sep 2018 (unvollständiger Abschlussmonat) sind aus den Visualisierungen ausgeblendet. Die zugrundeliegenden Mart-Tabellen enthalten den vollen Datensatz 2016–2018.
-
-### Page 1: Executive Overview
-
-![Executive Overview](docs/images/dashboard/page1_executive_overview.png)
-
-### Page 2: Sales & Product
-
-![Sales & Product](docs/images/dashboard/page2_sales_and_product.png)
-
-### Page 3: Delivery & Operations
-
-![Delivery & Operations](docs/images/dashboard/page3_delivery_and_operations.png)
-
-### Page 4: Customer & Payments
-
-![Customer & Payments](docs/images/dashboard/page4_customer_and_payments.png)
-
-DAX Measures: [`powerbi/te_create_measures.csx`](powerbi/te_create_measures.csx)
+- `dim_date`: Kalenderdimension (Jahr, Quartal, Monat, Woche, Tag inkl. Wochenend-Flag), Basis für Zeitraumvergleiche und Trendanalysen.
+- `dim_customer`: Kundenstamm mit Stadt, Bundesstaat und Koordinaten, Basis für geografische Auswertungen nach Kundenstandort.
+- `dim_seller`: Verkäuferstamm mit Stadt, Bundesstaat und Koordinaten, analog zu `dim_customer` für Verkäuferstandorte.
+- `dim_product`: Produktstamm mit Kategorie (Portugiesisch und Englisch) sowie physischen Maßen (Gewicht, Abmessungen).
+- `dim_order_status`: Bestellstatusausprägungen mit Kategorie und Sortierreihenfolge, Basis für die Statusverteilungsanalyse.
+- `dim_payment_type`: Zahlungsarten (Kreditkarte, Boleto, Voucher, Debitkarte), Basis für die Zahlungsstrukturanalyse.
 
 ---
 
 ## Data Warehouse Pipeline-Design
 
 Die Pipeline ist auf drei Kernziele ausgelegt: **Robustheit** (transaktionssicheres Laden ohne Datenverlust), **Rückverfolgbarkeit** (vollständiger Audit-Trail über alle Layer) und **Effizienz** (inkrementelles Ladekonzept, das nur geänderte Daten verarbeitet). Jeder Layer erfüllt eine klar abgegrenzte Aufgabe: von der Rohdatenaufnahme über die qualitätsgesicherte Bereinigung bis zum analytisch optimierten Star Schema.
+
+### Querschnittsschemas
+
+| Schema          | Inhalt                                                                                                                   |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `audit`         | `load_log`, `error_log`, `dq_log`, `job_log`: vollständiger Audit-Trail jedes Ladevorgangs                              |
+| `orchestration` | `pipeline_config` (Metadata Framework), `sp_run_layer`, `sp_run_full_load`, `agent_job_full_load` (SQL Server Agent Job) |
 
 ### Preprocessing: Quelldatenvorbereitung
 
@@ -193,22 +201,13 @@ Der Hash wird beim Load für jede Zeile berechnet und im MERGE mit dem gespeiche
 
 Zeilen, die im aktuellen Batch nicht mehr vorkommen, werden soft-deleted (`is_deleted = 1`) statt physisch entfernt. Eine physische Löschung würde FK-Referenzen aus dem Mart invalidieren und den Audit-Trail unterbrechen; durch Soft Delete bleiben Dimensionsschlüssel im Mart gültig und jeder vergangene Ladezustand bleibt rekonstruierbar. Wiederauftauchende Datensätze werden automatisch reaktiviert.
 
-### Mart: Analytisch optimiertes Star Schema
+### Mart: Ladelogik und Modellierung
 
-Der MART-Layer stellt das auswertungsbereite Datenmodell bereit: ein Kimball Star Schema mit 6 Dimensionen und 2 Faktentabellen, das direkt als Datenquelle für das Power BI Dashboard dient.
+Das Star-Schema-Modell ist im Abschnitt [Data Mart: Star-Schema](#data-mart-star-schema) beschrieben. Im Folgenden die Ladelogik erläutert:
 
-**Dimensionen** werden über SCD Type 1 MERGE geladen. Änderungen überschreiben den bestehenden Wert ohne Historisierung:
+**Dimensionen** werden über SCD Type 1 MERGE geladen. SCD Type 1 (Slowly Changing Dimension) beschreibt eine Strategie, bei der Dimensionsattribute bei Änderung direkt überschrieben werden; im Gegensatz zu SCD Type 2 werden keine historischen Versionsstände angelegt. Für dieses Projekt ist das ausreichend, da reine Stammdaten (z.B. Kundenadressen, Produktkategorien) für analytische Zwecke keine Historisierung benötigen. `dim_date`, `dim_payment_type` und `dim_order_status` werden einmalig geseedet (INSERT WHERE NOT EXISTS).
 
-| Dimension             | Typ                  | Besonderheit                                             |
-| --------------------- | -------------------- | -------------------------------------------------------- |
-| `dim_customer`        | MERGE (SCD Type 1)   | Natural Key: `customer_id`                              |
-| `dim_seller`          | MERGE (SCD Type 1)   | Natural Key: `seller_id`                                |
-| `dim_product`         | MERGE (SCD Type 1)   | Natural Key: `product_id`                               |
-| `dim_date`            | INSERT (WHERE NOT EXISTS) | Tally-CTE, einmalig für 2016–2025 befüllt          |
-| `dim_payment_type`    | INSERT (WHERE NOT EXISTS) | Fixer Wertevorrat (5 Typen), idempotent geseedet   |
-| `dim_order_status`    | INSERT (WHERE NOT EXISTS) | Fixer Wertevorrat (8 Status), idempotent geseedet  |
-
-**Faktentabellen** werden bei jedem Lauf vollständig neu geladen (TRUNCATE + INSERT), da die Quelldaten unveränderliche, abgeschlossene Orders repräsentieren; ein inkrementelles Ladekonzept wäre Overhead ohne Mehrwert. Non-Clustered Columnstore Indexes auf beiden Faktentabellen optimieren analytische Abfragen; nicht auflösbare FK-Referenzen werden über Sentinel-Werte (`-1` / `0`) abgesichert.
+**Faktentabellen** werden bei jedem Lauf vollständig neu geladen (TRUNCATE + INSERT), da die Quelldaten abgeschlossene Orders repräsentieren. Non-Clustered Columnstore Indexes auf beiden Faktentabellen optimieren analytische Abfragen. Nicht auflösbare FK-Referenzen werden über Sentinel-Werte (`-1` für Dimensionsschlüssel, `0` für Datumsschlüssel) abgesichert.
 
 ### Transaktionsmanagement
 
@@ -233,21 +232,29 @@ pipeline_config
 
 ---
 
-## Datenbasis
+## Power BI Dashboard
 
-**Quelle:** [Olist Brazilian E-Commerce (Kaggle)](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
+Das 4-seitige Dashboard deckt die zentralen analytischen Domänen der Plattform ab: Gesamtkennzahlen, Produkt- und Vertriebsanalyse, Lieferperformance sowie Kunden- und Zahlungsverhalten. Jede Seite enthält KPI-Cards mit MoM-Delta, themenspezifische Trendanalysen und einen gemeinsamen Filterbereich (Jahr, Monat, Bundesstaat, Produktkategorie).
 
-| Datei                                   | Inhalt                             |
-| --------------------------------------- | ---------------------------------- |
-| `olist_customers_dataset.csv`           | Kundenstammdaten                   |
-| `olist_orders_dataset.csv`              | Bestellkopfdaten                   |
-| `olist_order_items_dataset.csv`         | Bestellpositionen                  |
-| `olist_order_payments_dataset.csv`      | Zahlungsinformationen              |
-| `olist_order_reviews_dataset.csv`       | Kundenbewertungen                  |
-| `olist_products_dataset.csv`            | Produktstammdaten                  |
-| `olist_sellers_dataset.csv`             | Verkäuferstammdaten                |
-| `olist_geolocation_dataset.csv`         | PLZ-Geodaten                       |
-| `product_category_name_translation.csv` | Kategorie-Übersetzungen (PT → EN)  |
+> **Hinweis:** Der Report ist auf den Zeitraum Januar 2017 – August 2018 eingeschränkt. Sep–Dez 2016 (Ramp-up, sehr geringes Volumen) und Sep 2018 (unvollständiger Abschlussmonat) sind aus den Visualisierungen ausgeblendet. Die zugrundeliegenden Mart-Tabellen enthalten den vollen Datensatz 2016–2018.
+
+### Seite 1: Executive Overview
+
+![Executive Overview](docs/images/dashboard/page1_executive_overview.png)
+
+### Seite 2: Sales & Product
+
+![Sales & Product](docs/images/dashboard/page2_sales_and_product.png)
+
+### Seite 3: Delivery & Operations
+
+![Delivery & Operations](docs/images/dashboard/page3_delivery_and_operations.png)
+
+### Seite 4: Customer & Payments
+
+![Customer & Payments](docs/images/dashboard/page4_customer_and_payments.png)
+
+DAX Measures: [`powerbi/te_create_measures.csx`](powerbi/te_create_measures.csx)
 
 ---
 
