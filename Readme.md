@@ -240,7 +240,7 @@ Das 4-seitige Dashboard deckt die zentralen analytischen Domänen der Plattform 
 
 ### Seite 1: Executive Overview
 
-Beantwortet, wie sich die Plattform im gewählten Zeitraum insgesamt entwickelt: Umsatz, Bestellmenge und durchschnittlicher Bestellwert, dazu Liefertreue und Bewertungsniveau als die beiden Qualitätskennzahlen, jeweils mit Vormonatsvergleich. Ergänzt um die umsatzstärksten Produktkategorien, die Verteilung über die brasilianischen Bundesstaaten und den Umsatzverlauf über die zwei Jahre. Einstiegspunkt für die drei folgenden Seiten, die jeweils eine Domäne vertiefen.
+Beantwortet, wie sich die Plattform im gewählten Zeitraum insgesamt entwickelt: Umsatz, Bestellmenge und durchschnittlicher Bestellwert, dazu Liefertermintreue und Bewertungsniveau als die beiden Qualitätskennzahlen, jeweils mit Vormonatsvergleich. Ergänzt um die umsatzstärksten Produktkategorien, die Verteilung über die brasilianischen Bundesstaaten und den Umsatzverlauf über die zwei Jahre. Einstiegspunkt für die drei folgenden Seiten, die jeweils eine Domäne vertiefen.
 
 ![Executive Overview](docs/images/dashboard/page1_executive_overview.png)
 
@@ -252,7 +252,7 @@ Beantwortet, woraus der Umsatz entsteht und was er an Fracht kostet: Stückzahl,
 
 ### Seite 3: Delivery & Operations
 
-Beantwortet, wie zuverlässig geliefert wird und wie belastbar diese Aussage ist: 93,4% der Bestellungen erreichen den Kunden bis zum zugesagten Termin, im Mittel jedoch zwölf Tage davor, und 71.000 der rund 96.000 zugestellten Bestellungen treffen mehr als eine Woche zu früh ein. Die Liefertreue misst damit ebenso sehr, wie konservativ der Liefertermin geschätzt wird, wie die Leistung der Logistik. Die Seite zeigt Laufzeit und Termintreue je Bundesstaat, wo Rio de Janeiro mit 88,3% deutlich zurückbleibt, dazu den Verlauf über die Zeit, die Verteilung nach Abweichung zum Zieltermin und die Auftragsstatus-Struktur.
+Beantwortet, wie zuverlässig geliefert wird und wie belastbar diese Aussage ist: 93,4% der Bestellungen erreichen den Kunden bis zum geschätzten Liefertermin, im Mittel jedoch zwölf Tage davor, und 71.000 der rund 96.000 zugestellten Bestellungen treffen mehr als eine Woche zu früh ein. Die Liefertermintreue misst damit ebenso sehr, wie konservativ der Liefertermin geschätzt wird, wie die Leistung der Logistik. Die Seite zeigt Laufzeit und Liefertermintreue je Bundesstaat, wo Rio de Janeiro mit 88,3% deutlich zurückbleibt, dazu den Verlauf über die Zeit, die Verteilung nach Abweichung zum geschätzten Liefertermin und die Auftragsstatus-Struktur.
 
 ![Delivery & Operations](docs/images/dashboard/page3_delivery_and_operations.png)
 
