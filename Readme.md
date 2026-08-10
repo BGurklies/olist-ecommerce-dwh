@@ -234,23 +234,31 @@ pipeline_config
 
 ## Power BI Dashboard
 
-Das 4-seitige Dashboard deckt die zentralen analytischen Domänen der Plattform ab: Gesamtkennzahlen, Produkt- und Vertriebsanalyse, Lieferperformance sowie Kunden- und Zahlungsverhalten. Jede Seite enthält KPI-Cards mit MoM-Delta, themenspezifische Trendanalysen und einen gemeinsamen Filterbereich (Jahr, Monat, Bundesstaat, Produktkategorie).
+Das 4-seitige Dashboard deckt die zentralen analytischen Domänen der Plattform ab: Umsatz, Bestellmenge und Servicequalität im Überblick, Produkt- und Vertriebsanalyse, Lieferperformance sowie Kunden- und Zahlungsverhalten. Jede der vier Seiten kombiniert KPI-Cards mit Vormonatsvergleich, themenspezifische Trendanalysen und einen gemeinsamen Filterbereich.
 
 > **Hinweis:** Der Report ist auf den Zeitraum Januar 2017 – August 2018 eingeschränkt. Sep–Dez 2016 (Ramp-up, sehr geringes Volumen) und Sep 2018 (unvollständiger Abschlussmonat) sind aus den Visualisierungen ausgeblendet. Die zugrundeliegenden Mart-Tabellen enthalten den vollen Datensatz 2016–2018.
 
 ### Seite 1: Executive Overview
 
+Beantwortet, wie sich die Plattform im gewählten Zeitraum insgesamt entwickelt: Umsatz, Bestellmenge und durchschnittlicher Bestellwert, dazu Liefertreue und Bewertungsniveau als die beiden Qualitätskennzahlen, jeweils mit Vormonatsvergleich. Ergänzt um die umsatzstärksten Produktkategorien, die Verteilung über die brasilianischen Bundesstaaten und den Umsatzverlauf über die zwei Jahre. Einstiegspunkt für die drei folgenden Seiten, die jeweils eine Domäne vertiefen.
+
 ![Executive Overview](docs/images/dashboard/page1_executive_overview.png)
 
 ### Seite 2: Sales & Product
+
+Beantwortet, woraus der Umsatz entsteht und was er an Fracht kostet: Stückzahl, Durchschnittspreis und Frachtanteil je Kategorie fallen deutlich auseinander. Bed, Bath & Table führt mit 11.107 Artikeln die Mengenrangliste an, trägt aber mit R$ 93,3 den niedrigsten Durchschnittspreis und mit 16,5% den höchsten Frachtanteil; Watches & Gifts liegt mit R$ 200,7 und 7,7% spiegelbildlich dazu. Der Frachtanteil ist das Verhältnis von Frachtkosten zu Warenwert und steigt damit nicht nur bei niedrigem Preis, sondern ebenso mit Gewicht und Volumen der Ware. Bei sperrigen Heimtextilien fällt beides zusammen. Ergänzt wird die Seite um den Umsatzverlauf der fünf stärksten Kategorien über die zwei Jahre.
 
 ![Sales & Product](docs/images/dashboard/page2_sales_and_product.png)
 
 ### Seite 3: Delivery & Operations
 
+Beantwortet, wie zuverlässig geliefert wird und wie belastbar diese Aussage ist: 93,4% der Bestellungen erreichen den Kunden bis zum zugesagten Termin, im Mittel jedoch zwölf Tage davor, und 71.000 der rund 96.000 zugestellten Bestellungen treffen mehr als eine Woche zu früh ein. Die Liefertreue misst damit ebenso sehr, wie konservativ der Liefertermin geschätzt wird, wie die Leistung der Logistik. Die Seite zeigt Laufzeit und Termintreue je Bundesstaat, wo Rio de Janeiro mit 88,3% deutlich zurückbleibt, dazu den Verlauf über die Zeit, die Verteilung nach Abweichung zum Zieltermin und die Auftragsstatus-Struktur.
+
 ![Delivery & Operations](docs/images/dashboard/page3_delivery_and_operations.png)
 
 ### Seite 4: Customer & Payments
+
+Beantwortet, wer kauft, wie bezahlt wird und wie zufrieden die Kundschaft ist: Auf 95.121 Kunden kommen 98.353 Bestellungen, das Wachstum läuft also praktisch vollständig über Neukunden. Die Nachfrage konzentriert sich stark auf den Südosten, allein São Paulo stellt 39.875 davon. Bezahlt wird überwiegend per Kreditkarte (78,4% Anteil, R$ 12,5 Mio. Transaktionswert), gefolgt vom brasilianischen Bankbeleg Boleto mit R$ 2,9 Mio. Die Bewertungen sind polarisiert: 56.500 Fünf-Sterne-Urteilen stehen 10.600 Ein-Stern-Urteile gegenüber, mehr als die 8.000 der mittleren Stufe. Ergänzt um die Ratenzahlungsstruktur und den Verlauf von Bewertungsschnitt und Abgabequote.
 
 ![Customer & Payments](docs/images/dashboard/page4_customer_and_payments.png)
 

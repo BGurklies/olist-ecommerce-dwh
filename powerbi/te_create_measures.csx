@@ -2194,7 +2194,14 @@ var defs = new[] {
         Name   = "Avg Review Score",
         Folder = "Customer & Payments",
         Format = "0.0",
-        Dax    = @"AVERAGEX(FILTER('mart fact_sales', NOT ISBLANK('mart fact_sales'[review_score])), 'mart fact_sales'[review_score])"
+        Dax    = @"
+            AVERAGEX(
+                FILTER(
+                    ADDCOLUMNS(VALUES('mart fact_sales'[order_id]),
+                               ""@score"", CALCULATE(MAX('mart fact_sales'[review_score]))),
+                    NOT ISBLANK([@score])),
+                [@score])
+        "
     },
     new {
         Name   = "Credit Card Share %",
@@ -2234,7 +2241,12 @@ var defs = new[] {
         Name   = "Unique Customers",
         Folder = "Customer & Payments",
         Format = "#,0",
-        Dax    = @"DISTINCTCOUNT('mart fact_sales'[customer_key])"
+        Dax    = @"
+            CALCULATE(
+                DISTINCTCOUNT('mart dim_customer'[customer_unique_id]),
+                'mart fact_sales'
+            )
+        "
     },
     new {
         Name   = "Avg Credit Card Installments CM Label",
@@ -2891,7 +2903,7 @@ var defs = new[] {
             VAR _max   = MAX('mart dim_date'[year])
             VAR _count = DISTINCTCOUNT('mart dim_date'[year])
             RETURN
-                ""Monthly Review Trend ("" &
+                ""Monthly Review Score and Submission Rate ("" &
                 IF(_count = 1, _min, _min & ""–"" & _max) &
                 "")""
         "
