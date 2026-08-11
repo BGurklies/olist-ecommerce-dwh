@@ -370,3 +370,19 @@ olist-ecommerce-dwh/
 ## Setup
 
 Siehe [SETUP.md](SETUP.md) für die Schritt-für-Schritt-Anleitung zur lokalen Reproduzierbarkeit.
+
+---
+
+## Ausblick
+
+Das Dashboard betrachtet den Marktplatz aus Käufer- und Produktsicht, von Umsatz und Sortiment über die Lieferperformance bis zu Zahlung und Bewertung. Die Architektur trägt bewusst mehr, als das Reporting bislang darstellt. Drei Ausbaustufen liegen damit besonders nahe:
+
+- **Verkäuferseite:** `dim_seller` ist im Modell bereits angelegt und erschließt die zweite Marktplatzhälfte: Verkäuferkonzentration, Standorte und Servicequalität je Verkäufer.
+- **Bewertungstexte:** Der Freitext (`review_comment_message`) ist bis in die CLEANSED-Schicht geladen und trägt eine Sentiment- oder Themenanalyse, die die Bewertungs-Polarisierung von Seite 4 in ihre Ursachen auflöst.
+- **Geodistanz:** Aus den vorhandenen Kunden- und Verkäuferkoordinaten lässt sich die Verkäufer-Käufer-Distanz als Treiber von Lieferzeit und Frachtanteil ableiten (Seiten 2 und 3).
+
+---
+
+## Lizenz
+
+MIT-Lizenz, siehe [LICENSE](LICENSE).
