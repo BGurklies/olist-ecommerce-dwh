@@ -2,7 +2,8 @@ USE msdb;
 GO
 
 -- ============================================================
--- Job:     OlistDWH_Orchestration_FullLoad_Daily
+-- Job:      OlistDWH_Orchestration_FullLoad_Daily
+-- Schedule: Daily_0200, daily at 02:00
 -- Steps:
 --   1. CmdExec  — Preprocess CSVs
 --   2. T-SQL    — Execute Full Load Pipeline

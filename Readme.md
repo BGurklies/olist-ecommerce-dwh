@@ -271,24 +271,6 @@ DAX Measures: [`powerbi/te_create_measures.csx`](powerbi/te_create_measures.csx)
 ```
 olist-ecommerce-analytics-platform/
 ├── data/            # CSVs, nicht versioniert
-├── docs/
-│   └── images/
-│       ├── architecture/
-│       │   └── dwh_architecture.svg
-│       └── dashboard/
-│           ├── page1_executive_overview.png
-│           ├── page2_sales_and_product.png
-│           ├── page3_delivery_and_operations.png
-│           └── page4_customer_and_payments.png
-├── powerbi/
-│   ├── report/      # PBIP, nicht versioniert
-│   ├── olist_theme.json
-│   └── te_create_measures.csx
-├── analysis/
-│   └── eda/
-│       ├── eda_customers.sql
-│       ├── eda_orders.sql
-│       └── ...
 ├── scripts/
 │   └── ps/
 │       └── preprocess_all.ps1
@@ -319,8 +301,8 @@ olist-ecommerce-analytics-platform/
 │   │   ├── schema/
 │   │   │   └── create_mart_tables.sql
 │   │   └── procedures/
-│   │       ├── mart_sp_load_fact_sales.sql
 │   │       ├── mart_sp_load_fact_payments.sql
+│   │       ├── mart_sp_load_fact_sales.sql
 │   │       └── ...
 │   ├── orchestration/
 │   │   ├── schema/
@@ -339,6 +321,26 @@ olist-ecommerce-analytics-platform/
 │       ├── V001__disable_non_customers_pipelines.sql
 │       ├── V002_activate_pipelines_for_orders_and_order_items.sql
 │       └── ...
+├── analysis/
+│   └── eda/
+│       ├── eda_customers.sql
+│       ├── eda_orders.sql
+│       └── ...
+├── powerbi/
+│   ├── report/      # PBIP, nicht versioniert
+│   ├── olist_theme.json
+│   └── te_create_measures.csx
+├── docs/
+│   └── images/
+│       ├── architecture/
+│       │   └── dwh_architecture.svg
+│       └── dashboard/
+│           ├── page1_executive_overview.png
+│           ├── page2_sales_and_product.png
+│           ├── page3_delivery_and_operations.png
+│           └── page4_customer_and_payments.png
+├── SETUP.md
+└── LICENSE
 ```
 
 ---
