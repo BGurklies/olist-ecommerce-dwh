@@ -269,8 +269,8 @@ DAX Measures: [`powerbi/te_create_measures.csx`](powerbi/te_create_measures.csx)
 ## Projektstruktur
 
 ```
-olist-ecommerce-dwh/
-├── data/
+olist-ecommerce-analytics-platform/
+├── data/            # CSVs, nicht versioniert
 ├── docs/
 │   └── images/
 │       ├── architecture/
@@ -281,6 +281,7 @@ olist-ecommerce-dwh/
 │           ├── page3_delivery_and_operations.png
 │           └── page4_customer_and_payments.png
 ├── powerbi/
+│   ├── report/      # PBIP, nicht versioniert
 │   ├── olist_theme.json
 │   └── te_create_measures.csx
 ├── analysis/
@@ -297,6 +298,9 @@ olist-ecommerce-dwh/
 │   ├── audit/
 │   │   └── schema/
 │   │       └── create_audit_tables.sql
+│   ├── shared/
+│   │   └── functions/
+│   │       └── fn_normalize_text.sql
 │   ├── raw/
 │   │   ├── schema/
 │   │   │   └── create_raw_tables.sql
@@ -326,7 +330,9 @@ olist-ecommerce-dwh/
 │   │   │   ├── orchestration_sp_run_full_load.sql
 │   │   │   └── orchestration_sp_run_layer.sql
 │   │   ├── config/
-│   │   │   └── dev_pipeline_config.sql
+│   │   │   ├── dev_pipeline_config.sql
+│   │   │   ├── prod_pipeline_config.sql
+│   │   │   └── test_pipeline_config.sql
 │   │   └── jobs/
 │   │       └── agent_job_full_load.sql
 │   └── migrations/
