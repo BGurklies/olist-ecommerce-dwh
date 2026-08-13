@@ -1,0 +1,2 @@
+# .csx files are Tabular Editor scripts for DAX; without this line GitHub reports the repo as C#.
+*.csx linguist-detectable=false
